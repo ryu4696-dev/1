@@ -1,48 +1,36 @@
-name: Build Fold Trio APK
-
+name: Build Drive Meter APK
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
-
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Set up Gradle 9.6
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.6.0'
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-
-      - name: Install Android 16 SDK
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
-
+      - name: Install Android SDK
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
-
       - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk FoldTrio-v0.1-debug.apk
-
+        run: cp app/build/outputs/apk/debug/app-debug.apk DriveMeter-v0.2-debug.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FoldTrio-v0.1-debug-apk
-          path: FoldTrio-v0.1-debug.apk
+          name: DriveMeter-v0.2-debug-apk
+          path: DriveMeter-v0.2-debug.apk
           if-no-files-found: error

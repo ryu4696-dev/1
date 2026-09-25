@@ -28,7 +28,6 @@ class MainActivity : Activity() {
     private lateinit var widthEdit: EditText
     private lateinit var depthEdit: EditText
     private lateinit var processEdit: EditText
-    private lateinit var lotEdit: EditText
     private lateinit var unitText: TextView
 
     private var latestInput: QuoteInput? = null
@@ -48,15 +47,12 @@ class MainActivity : Activity() {
             addView(root)
         })
 
-        root.addView(label("段ボール簡易見積", 27, true))
-        root.addView(label("1品だけ、必要項目だけ入力", 14, false, TEXT_SUB), lp(mb = 20))
-
         root.addView(sectionLabel("フルート"))
         val fluteRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
         }
-        Flute.entries.forEachIndexed { index, flute ->
+        listOf(Flute.AF, Flute.BF, Flute.WF).forEachIndexed { index, flute ->
             val b = TextView(this).apply {
                 text = flute.label
                 textSize = 18f
@@ -90,7 +86,7 @@ class MainActivity : Activity() {
 
         root.addView(sectionLabel("材質"), lp(mt = 16))
         materialButton = TextView(this).apply {
-            text = "${selectedMaterial.name}   ▼"
+            text = "${displayMaterial(selectedMaterial.name)}   ▼"
             textSize = 17f
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(16), 0, dp(16), 0)
@@ -103,10 +99,6 @@ class MainActivity : Activity() {
         root.addView(sectionLabel("加工賃（円 / ㎡）"), lp(mt = 16))
         processEdit = numEdit("加工賃", decimal = true).apply { setText("10") }
         root.addView(processEdit, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(60)))
-
-        root.addView(sectionLabel("ロット（個）"), lp(mt = 16))
-        lotEdit = numEdit("ロット").apply { setText("1000") }
-        root.addView(lotEdit, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(60)))
 
         val priceCard = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -164,7 +156,7 @@ class MainActivity : Activity() {
             list.adapter = object : ArrayAdapter<Material>(this, android.R.layout.simple_list_item_1, visible) {
                 override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
                     val tv = super.getView(position, convertView, parent) as TextView
-                    tv.text = getItem(position)?.name.orEmpty()
+                    tv.text = displayMaterial(getItem(position)?.name.orEmpty())
                     tv.textSize = 17f
                     tv.setTextColor(TEXT)
                     tv.setPadding(dp(14), dp(10), dp(14), dp(10))
@@ -183,7 +175,7 @@ class MainActivity : Activity() {
 
         list.setOnItemClickListener { _, _, position, _ ->
             selectedMaterial = visible[position]
-            materialButton.text = "${selectedMaterial.name}   ▼"
+            materialButton.text = "${displayMaterial(selectedMaterial.name)}   ▼"
             invalidatePrice()
             dialog.dismiss()
         }
@@ -209,8 +201,7 @@ class MainActivity : Activity() {
             width = widthEdit.text.toString().toInt(),
             depth = depthEdit.text.toString().toInt(),
             material = selectedMaterial,
-            processRate = processEdit.text.toString().toDoubleOrNull() ?: 0.0,
-            lot = lotEdit.text.toString().toInt()
+            processRate = processEdit.text.toString().toDoubleOrNull() ?: 0.0
         )
         val result = Calculator.calculate(input)
         latestInput = input
@@ -231,9 +222,7 @@ class MainActivity : Activity() {
             putExtra("w", i.width)
             putExtra("d", i.depth)
             putExtra("material", i.material.name)
-            putExtra("lot", i.lot)
             putExtra("unit", r.unitPrice)
-            putExtra("total", r.totalPrice)
         })
     }
 
@@ -300,32 +289,32 @@ class QuoteActivity : Activity() {
         val l = intent.getIntExtra("l", 0)
         val w = intent.getIntExtra("w", 0)
         val d = intent.getIntExtra("d", 0)
-        val lot = intent.getIntExtra("lot", 0)
         val unit = intent.getIntExtra("unit", 0)
-        val total = intent.getLongExtra("total", 0)
         val flute = intent.getStringExtra("flute").orEmpty()
-        val material = intent.getStringExtra("material").orEmpty()
+        val material = displayMaterial(intent.getStringExtra("material").orEmpty())
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(18), dp(20), dp(24))
+            setPadding(dp(20), dp(24), dp(20), dp(24))
             setBackgroundColor(MainActivity.BG)
         }
         setContentView(root)
 
-        root.addView(text("概算金額", 24, true, Gravity.CENTER))
         root.addView(CardboardBoxView(this).apply {
             lengthMm = l
             widthMm = w
             depthMm = d
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(345)))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(385)))
 
-        root.addView(text("ドラッグして箱を回転", 12, false, Gravity.CENTER, MainActivity.TEXT_SUB), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)))
-        val spec = text("$flute   $l × $w × $d mm\n$material\n${nf(lot)} 個", 17, false, Gravity.CENTER)
-        spec.setPadding(0, dp(8), 0, dp(8))
-        root.addView(spec)
-        root.addView(text("${nf(unit)} 円 / 個", 40, true, Gravity.CENTER, MainActivity.GREEN_DARK))
-        root.addView(text("合計  ${nf(total)} 円", 24, true, Gravity.CENTER), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(66)))
+        val materialLine = text("$material  $flute", 19, true, Gravity.CENTER)
+        materialLine.setPadding(0, dp(8), 0, dp(4))
+        root.addView(materialLine)
+
+        val dimensionLine = text("$l × $w × $d mm", 18, false, Gravity.CENTER)
+        dimensionLine.setPadding(0, 0, 0, dp(14))
+        root.addView(dimensionLine)
+
+        root.addView(text("${nf(unit)} 円 / 個", 42, true, Gravity.CENTER, MainActivity.GREEN_DARK))
         root.addView(TextView(this).apply {
             text = "戻る"
             textSize = 17f
@@ -337,7 +326,7 @@ class QuoteActivity : Activity() {
                 cornerRadius = dp(12).toFloat()
             }
             setOnClickListener { finish() }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(58)).apply { topMargin = dp(6) })
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(58)).apply { topMargin = dp(28) })
     }
 
     private fun text(t: String, size: Int, bold: Boolean, gravityValue: Int, color: Int = MainActivity.TEXT) = TextView(this).apply {
@@ -347,6 +336,7 @@ class QuoteActivity : Activity() {
         setTextColor(color)
         if (bold) setTypeface(typeface, Typeface.BOLD)
     }
+
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun nf(v: Number) = NumberFormat.getNumberInstance(Locale.JAPAN).format(v)
 }
@@ -365,30 +355,40 @@ class CardboardBoxView(context: Context) : View(context) {
     private var lastX = 0f
     private var lastY = 0f
 
-    private val texture = makeCardboardTexture(192)
+    private val texture = makeCardboardTexture(256)
     private val texturePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = BitmapShader(texture, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
         isFilterBitmap = true
     }
     private val shadePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val edgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(103, 72, 43)
+        color = Color.rgb(94, 64, 38)
         style = Paint.Style.STROKE
-        strokeWidth = dpF(1.6f)
+        strokeWidth = dpF(1.7f)
         strokeJoin = Paint.Join.ROUND
+    }
+    private val creasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(145, 91, 61, 34)
+        style = Paint.Style.STROKE
+        strokeWidth = dpF(1.1f)
+    }
+    private val cutPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(180, 81, 52, 31)
+        style = Paint.Style.STROKE
+        strokeWidth = dpF(1.35f)
     }
 
     private data class V3(val x: Float, val y: Float, val z: Float)
     private data class P2(val x: Float, val y: Float, val z: Float)
-    private data class Face(val indices: IntArray, val normal: V3)
+    private data class Face(val id: String, val indices: IntArray, val normal: V3)
 
     private val faces = listOf(
-        Face(intArrayOf(0, 1, 2, 3), V3(0f, 0f, -1f)),
-        Face(intArrayOf(5, 4, 7, 6), V3(0f, 0f, 1f)),
-        Face(intArrayOf(4, 0, 3, 7), V3(-1f, 0f, 0f)),
-        Face(intArrayOf(1, 5, 6, 2), V3(1f, 0f, 0f)),
-        Face(intArrayOf(3, 2, 6, 7), V3(0f, 1f, 0f)),
-        Face(intArrayOf(4, 5, 1, 0), V3(0f, -1f, 0f))
+        Face("front", intArrayOf(0, 1, 2, 3), V3(0f, 0f, -1f)),
+        Face("back", intArrayOf(5, 4, 7, 6), V3(0f, 0f, 1f)),
+        Face("left", intArrayOf(4, 0, 3, 7), V3(-1f, 0f, 0f)),
+        Face("right", intArrayOf(1, 5, 6, 2), V3(1f, 0f, 0f)),
+        Face("top", intArrayOf(3, 2, 6, 7), V3(0f, 1f, 0f)),
+        Face("bottom", intArrayOf(4, 5, 1, 0), V3(0f, -1f, 0f))
     )
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -403,7 +403,10 @@ class CardboardBoxView(context: Context) : View(context) {
                 val dx = event.x - lastX
                 val dy = event.y - lastY
                 yaw += dx * 0.012f
-                pitch = (pitch + dy * 0.009f).coerceIn(Math.toRadians(-68.0).toFloat(), Math.toRadians(68.0).toFloat())
+                pitch = (pitch + dy * 0.009f).coerceIn(
+                    Math.toRadians(-68.0).toFloat(),
+                    Math.toRadians(68.0).toFloat()
+                )
                 lastX = event.x
                 lastY = event.y
                 invalidate()
@@ -422,66 +425,90 @@ class CardboardBoxView(context: Context) : View(context) {
         if (width <= 0 || height <= 0) return
 
         val maxDim = max(lengthMm, max(widthMm, depthMm)).toFloat().coerceAtLeast(1f)
-        val lx = lengthMm / maxDim
-        val wz = widthMm / maxDim
-        val hy = depthMm / maxDim
+        val xHalf = max(lengthMm / maxDim, 0.035f) / 2f
+        val zHalf = max(widthMm / maxDim, 0.035f) / 2f
+        val yHalf = max(depthMm / maxDim, 0.035f) / 2f
 
-        val xh = max(lx, 0.035f) / 2f
-        val zh = max(wz, 0.035f) / 2f
-        val yh = max(hy, 0.035f) / 2f
         val vertices = arrayOf(
-            V3(-xh, -yh, -zh), V3(xh, -yh, -zh), V3(xh, yh, -zh), V3(-xh, yh, -zh),
-            V3(-xh, -yh, zh), V3(xh, -yh, zh), V3(xh, yh, zh), V3(-xh, yh, zh)
+            V3(-xHalf, -yHalf, -zHalf), V3(xHalf, -yHalf, -zHalf),
+            V3(xHalf, yHalf, -zHalf), V3(-xHalf, yHalf, -zHalf),
+            V3(-xHalf, -yHalf, zHalf), V3(xHalf, -yHalf, zHalf),
+            V3(xHalf, yHalf, zHalf), V3(-xHalf, yHalf, zHalf)
         )
 
         val rotated = vertices.map { rotate(it) }
-        val marginX = dpF(32f)
-        val marginTop = dpF(34f)
-        val marginBottom = dpF(34f)
+        val marginX = dpF(22f)
+        val marginY = dpF(18f)
         val availW = width - marginX * 2
-        val availH = height - marginTop - marginBottom
-
+        val availH = height - marginY * 2
         val minX = rotated.minOf { it.x }
         val maxX = rotated.maxOf { it.x }
         val minY = rotated.minOf { it.y }
         val maxY = rotated.maxOf { it.y }
-        val spanX = (maxX - minX).coerceAtLeast(0.01f)
-        val spanY = (maxY - minY).coerceAtLeast(0.01f)
-        val scale = min(availW / spanX, availH / spanY) * 0.83f
+        val scale = min(
+            availW / (maxX - minX).coerceAtLeast(0.01f),
+            availH / (maxY - minY).coerceAtLeast(0.01f)
+        ) * 0.84f
         val cx = width / 2f - (minX + maxX) / 2f * scale
         val cy = height / 2f + (minY + maxY) / 2f * scale
         val pts = rotated.map { P2(cx + it.x * scale, cy - it.y * scale, it.z) }
 
-        val light = normalize(V3(-0.45f, 0.85f, -0.65f))
+        val light = normalize(V3(-0.40f, 0.90f, -0.55f))
         val ordered = faces.map { face ->
-            val avgZ = face.indices.map { pts[it].z }.average().toFloat()
-            face to avgZ
+            face to face.indices.map { pts[it].z }.average().toFloat()
         }.sortedByDescending { it.second }
 
         ordered.forEach { (face, _) ->
-            val path = Path().apply {
-                val first = pts[face.indices[0]]
-                moveTo(first.x, first.y)
-                for (i in 1 until face.indices.size) {
-                    val p = pts[face.indices[i]]
-                    lineTo(p.x, p.y)
-                }
-                close()
-            }
+            val poly = face.indices.map { pts[it] }
+            val path = poly.toPath()
+            canvas.drawPath(path, texturePaint)
 
             val n = rotate(face.normal)
             val ndotl = (n.x * light.x + n.y * light.y + n.z * light.z).coerceIn(-1f, 1f)
-            canvas.drawPath(path, texturePaint)
             val shadeAlpha = when {
-                ndotl > 0.45f -> 15
-                ndotl > 0.05f -> 34
-                ndotl > -0.35f -> 58
-                else -> 82
+                ndotl > 0.45f -> 10
+                ndotl > 0.05f -> 26
+                ndotl > -0.35f -> 46
+                else -> 70
             }
-            shadePaint.color = Color.argb(shadeAlpha, 70, 43, 20)
+            shadePaint.color = Color.argb(shadeAlpha, 67, 43, 20)
             canvas.drawPath(path, shadePaint)
             canvas.drawPath(path, edgePaint)
+
+            when (face.id) {
+                "top" -> drawTopFlaps(canvas, poly)
+                "front", "back" -> drawVerticalJoint(canvas, poly)
+                "right", "left" -> drawSideFold(canvas, poly)
+            }
         }
+    }
+
+    private fun drawTopFlaps(canvas: Canvas, p: List<P2>) {
+        val nearMid = midpoint(p[0], p[1])
+        val farMid = midpoint(p[3], p[2])
+        canvas.drawLine(nearMid.x, nearMid.y, farMid.x, farMid.y, creasePaint)
+
+        listOf(0.22f, 0.78f).forEach { t ->
+            val near = lerp(p[0], p[1], t)
+            val far = lerp(p[3], p[2], t)
+            val mid = midpoint(near, far)
+            canvas.drawLine(near.x, near.y, mid.x, mid.y, cutPaint)
+            canvas.drawLine(far.x, far.y, mid.x, mid.y, cutPaint)
+        }
+    }
+
+    private fun drawVerticalJoint(canvas: Canvas, p: List<P2>) {
+        val top = midpoint(p[2], p[3])
+        val bottom = midpoint(p[0], p[1])
+        val paint = Paint(creasePaint).apply { alpha = 65 }
+        canvas.drawLine(top.x, top.y, bottom.x, bottom.y, paint)
+    }
+
+    private fun drawSideFold(canvas: Canvas, p: List<P2>) {
+        val top = midpoint(p[2], p[3])
+        val bottom = midpoint(p[0], p[1])
+        val paint = Paint(creasePaint).apply { alpha = 48 }
+        canvas.drawLine(top.x, top.y, bottom.x, bottom.y, paint)
     }
 
     private fun rotate(v: V3): V3 {
@@ -499,34 +526,62 @@ class CardboardBoxView(context: Context) : View(context) {
         return V3(v.x / len, v.y / len, v.z / len)
     }
 
+    private fun midpoint(a: P2, b: P2) =
+        P2((a.x + b.x) / 2f, (a.y + b.y) / 2f, (a.z + b.z) / 2f)
+
+    private fun lerp(a: P2, b: P2, t: Float) =
+        P2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t)
+
+    private fun List<P2>.toPath() = Path().apply {
+        moveTo(this@toPath[0].x, this@toPath[0].y)
+        for (i in 1 until this@toPath.size) lineTo(this@toPath[i].x, this@toPath[i].y)
+        close()
+    }
+
     private fun makeCardboardTexture(size: Int): Bitmap {
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(Color.rgb(202, 158, 103))
+        canvas.drawColor(Color.rgb(197, 153, 99))
         val random = Random(34192)
-        val dot = Paint(Paint.ANTI_ALIAS_FLAG)
-        repeat(size * 7) {
-            val base = random.nextInt(-24, 25)
-            dot.color = Color.rgb(
-                (202 + base).coerceIn(145, 230),
-                (158 + base).coerceIn(110, 205),
-                (103 + base / 2).coerceIn(65, 150)
+
+        val fleck = Paint(Paint.ANTI_ALIAS_FLAG)
+        repeat(size * 10) {
+            val delta = random.nextInt(-20, 21)
+            fleck.color = Color.rgb(
+                (197 + delta).coerceIn(150, 226),
+                (153 + delta).coerceIn(112, 198),
+                (99 + delta / 2).coerceIn(65, 142)
             )
-            dot.alpha = random.nextInt(18, 52)
+            fleck.alpha = random.nextInt(10, 34)
             val x = random.nextFloat() * size
             val y = random.nextFloat() * size
-            canvas.drawCircle(x, y, random.nextFloat() * 1.4f + 0.25f, dot)
+            canvas.drawCircle(x, y, random.nextFloat() * 1.25f + 0.15f, fleck)
         }
+
         val fiber = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            strokeWidth = 0.65f
-            color = Color.rgb(122, 86, 53)
+            strokeWidth = 0.72f
+            color = Color.rgb(125, 88, 54)
         }
-        repeat(size / 2) {
-            fiber.alpha = random.nextInt(12, 34)
+        repeat(size * 2) {
+            fiber.alpha = random.nextInt(7, 25)
             val x = random.nextFloat() * size
             val y = random.nextFloat() * size
-            val len = random.nextFloat() * 8f + 2f
-            canvas.drawLine(x, y, x + len, y + random.nextFloat() * 1.8f - 0.9f, fiber)
+            val len = random.nextFloat() * 11f + 2f
+            val slope = random.nextFloat() * 0.22f - 0.11f
+            canvas.drawLine(x, y, x + len, y + len * slope, fiber)
+        }
+
+        val pulp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(232, 205, 166) }
+        repeat(size / 2) {
+            pulp.alpha = random.nextInt(5, 18)
+            val x = random.nextFloat() * size
+            val y = random.nextFloat() * size
+            canvas.drawOval(
+                x, y,
+                x + random.nextFloat() * 5f + 1f,
+                y + random.nextFloat() * 1.4f + 0.3f,
+                pulp
+            )
         }
         return bitmap
     }
@@ -599,22 +654,19 @@ data class QuoteInput(
     val width: Int,
     val depth: Int,
     val material: Material,
-    val processRate: Double,
-    val lot: Int
+    val processRate: Double
 )
 
 data class QuoteResult(
     val paperWidth: Int,
     val up: Int,
     val areaPerPiece: Double,
-    val unitPrice: Int,
-    val totalPrice: Long
+    val unitPrice: Int
 )
 
 object Calculator {
     fun calculate(i: QuoteInput): QuoteResult {
         require(i.length > 0 && i.width > 0 && i.depth > 0) { "寸法を入力してください" }
-        require(i.lot > 0) { "ロットを入力してください" }
         require(i.processRate >= 0) { "加工賃を確認してください" }
 
         val flow = i.flute.glue + i.length + i.width + i.length + (i.width + i.flute.panelAdjust) + 7
@@ -641,8 +693,9 @@ object Calculator {
             paperWidth = best.paper,
             up = best.up,
             areaPerPiece = areaPerPiece,
-            unitPrice = unitPrice,
-            totalPrice = unitPrice.toLong() * i.lot
+            unitPrice = unitPrice
         )
     }
 }
+
+private fun displayMaterial(name: String): String = name.replace('X', 'x')

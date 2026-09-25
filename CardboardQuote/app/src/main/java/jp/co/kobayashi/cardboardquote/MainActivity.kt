@@ -431,7 +431,7 @@ class DevelopmentView(context: Context) : View(context) {
     private val dimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = MainActivity.TEXT
         style = Paint.Style.STROKE
-        strokeWidth = dpF(0.9f)
+        strokeWidth = dpF(0.95f)
     }
     private val dimTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = MainActivity.TEXT
@@ -447,49 +447,39 @@ class DevelopmentView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        canvas.drawColor(Color.TRANSPARENT)
         canvas.drawText("展開", dpF(6f), dpF(16f), titlePaint)
 
-        // Excel準拠:
-        // 四面 = 巾 + panelAdjust
-        // 上下フラップ = (巾 + flapAdjust) / 2
-        // 落ち7mmは製造計算には使うが、この見せる図面には描かない。
         val glue = flute.glue.toFloat()
-        val correctedFourth = (widthMm + flute.panelAdjust).coerceAtLeast(1).toFloat()
+        val panel4 = (widthMm + flute.panelAdjust).coerceAtLeast(1).toFloat()
         val flap = (widthMm + flute.flapAdjust) / 2f
-        val panelWidths = floatArrayOf(
-            lengthMm.toFloat(),
-            widthMm.toFloat(),
-            lengthMm.toFloat(),
-            correctedFourth
-        )
+        val panelWidths = floatArrayOf(lengthMm.toFloat(), widthMm.toFloat(), lengthMm.toFloat(), panel4)
 
-        val bodyWmm = panelWidths.sum()
-        val drawingWmm = glue + bodyWmm
-        val drawingHmm = depthMm + flap * 2f
+        val totalW = glue + panelWidths.sum()
+        val totalH = depthMm + flap * 2f
 
-        val leftPad = dpF(26f)
-        val rightPad = dpF(82f)
-        val topPad = dpF(34f)
-        val bottomPad = dpF(68f)
+        val leftPad = dpF(22f)
+        val rightPad = dpF(84f)
+        val topPad = dpF(38f)
+        val bottomPad = dpF(66f)
         val usableW = (width - leftPad - rightPad).coerceAtLeast(1f)
         val usableH = (height - topPad - bottomPad).coerceAtLeast(1f)
-        val scale = min(usableW / drawingWmm, usableH / drawingHmm)
+        val scale = min(usableW / totalW, usableH / totalH)
 
-        val originX = leftPad + (usableW - drawingWmm * scale) / 2f
-        val originY = topPad + (usableH - drawingHmm * scale) / 2f
+        val originX = leftPad + (usableW - totalW * scale) / 2f
+        val originY = topPad + (usableH - totalH * scale) / 2f
         val topY = originY
-        val bodyTop = topY + flap * scale
+        val bodyTop = originY + flap * scale
         val bodyBottom = bodyTop + depthMm * scale
         val bottomY = bodyBottom + flap * scale
 
         val glueLeft = originX
         val glueRight = glueLeft + glue * scale
-
         val xs = FloatArray(5)
         xs[0] = glueRight
         for (i in panelWidths.indices) xs[i + 1] = xs[i] + panelWidths[i] * scale
 
-        // のりしろ。形は残すが「糊代」という文字は出さない。
+        // のりしろ
         val clip = min(dpF(6f), depthMm * scale * 0.12f)
         val gluePath = Path().apply {
             moveTo(glueRight, bodyTop)
@@ -501,107 +491,93 @@ class DevelopmentView(context: Context) : View(context) {
         canvas.drawPath(gluePath, fillPaint)
         canvas.drawPath(gluePath, outlinePaint)
 
-        // 本体4面 + 上下フラップ
+        // 本体4面
         for (i in 0..3) {
             val left = xs[i]
             val right = xs[i + 1]
-
             canvas.drawRect(left, bodyTop, right, bodyBottom, fillPaint)
-            canvas.drawRect(left, topY, right, bodyTop, fillPaint)
-            canvas.drawRect(left, bodyBottom, right, bottomY, fillPaint)
-
             canvas.drawRect(left, bodyTop, right, bodyBottom, outlinePaint)
-            canvas.drawRect(left, topY, right, bodyTop, outlinePaint)
-            canvas.drawRect(left, bodyBottom, right, bottomY, outlinePaint)
+        }
+
+        // フラップは各面ごとに切れているので、隣との間を少し空ける
+        val slitGap = dpF(3f)
+        for (i in 0..3) {
+            var left = xs[i]
+            var right = xs[i + 1]
+            if (i > 0) left += slitGap / 2f
+            if (i < 3) right -= slitGap / 2f
+            if (right > left) {
+                canvas.drawRect(left, topY, right, bodyTop, fillPaint)
+                canvas.drawRect(left, topY, right, bodyTop, outlinePaint)
+                canvas.drawRect(left, bodyBottom, right, bottomY, fillPaint)
+                canvas.drawRect(left, bodyBottom, right, bottomY, outlinePaint)
+            }
         }
 
         // 折り線
         canvas.drawLine(xs[0], bodyTop, xs[4], bodyTop, foldPaint)
         canvas.drawLine(xs[0], bodyBottom, xs[4], bodyBottom, foldPaint)
         for (i in 1..3) {
-            canvas.drawLine(xs[i], topY, xs[i], bottomY, foldPaint)
+            canvas.drawLine(xs[i], bodyTop, xs[i], bodyBottom, foldPaint)
         }
         canvas.drawLine(glueRight, bodyTop, glueRight, bodyBottom, foldPaint)
 
-        // 連続寸法: のりしろ / 長 / 巾 / 長 / 補正後四面
-        val chainY = bottomY + dpF(18f)
-        drawHorizontalDim(canvas, glueLeft, glueRight, chainY, flute.glue.toString())
+        // 連続寸法：のりしろ / 長 / 巾 / 長 / 補正後四面
+        val yDim1 = bottomY + dpF(18f)
+        drawHorizontalDim(canvas, glueLeft, glueRight, yDim1, flute.glue.toString())
+        drawHorizontalDim(canvas, xs[0], xs[1], yDim1, lengthMm.toString())
+        drawHorizontalDim(canvas, xs[1], xs[2], yDim1, widthMm.toString())
+        drawHorizontalDim(canvas, xs[2], xs[3], yDim1, lengthMm.toString())
+        drawHorizontalDim(canvas, xs[3], xs[4], yDim1, panel4.roundToInt().toString())
 
-        val labels = listOf(
-            lengthMm.toString(),
-            widthMm.toString(),
-            lengthMm.toString(),
-            correctedFourth.roundToInt().toString()
-        )
-        for (i in 0..3) {
-            drawHorizontalDim(canvas, xs[i], xs[i + 1], chainY, labels[i])
-        }
+        // 流れ総寸法：のりしろ込み、落ち7mmは含めない
+        val yDim2 = yDim1 + dpF(22f)
+        val flowDrawing = flute.glue + lengthMm + widthMm + lengthMm + (widthMm + flute.panelAdjust)
+        drawHorizontalDim(canvas, glueLeft, xs[4], yDim2, flowDrawing.toString())
 
-        // 本体4面の総寸法。落ち7mm・のりしろは含めない。
-        val overallY = chainY + dpF(24f)
-        drawHorizontalDim(
-            canvas,
-            xs[0],
-            xs[4],
-            overallY,
-            bodyWmm.roundToInt().toString()
-        )
-
-        // 縦方向もExcelのフラップ補正値を使用。
-        val xChain = xs[4] + dpF(18f)
-        drawVerticalDim(canvas, xChain, topY, bodyTop, fmt1(flap.toDouble()))
-        drawVerticalDim(canvas, xChain, bodyTop, bodyBottom, depthMm.toString())
-        drawVerticalDim(canvas, xChain, bodyBottom, bottomY, fmt1(flap.toDouble()))
-
-        // 図面全体の縦寸法 = 上フラップ + 深 + 下フラップ
-        val xOverall = xChain + dpF(30f)
-        drawVerticalDim(
-            canvas,
-            xOverall,
-            topY,
-            bottomY,
-            fmt1((depthMm + flap * 2f).toDouble())
-        )
+        // 縦寸法：Excel補正後フラップ / 深 / フラップ
+        val xDim1 = xs[4] + dpF(18f)
+        drawVerticalDim(canvas, xDim1, topY, bodyTop, fmt1(flap.toDouble()))
+        drawVerticalDim(canvas, xDim1, bodyTop, bodyBottom, depthMm.toString())
+        drawVerticalDim(canvas, xDim1, bodyBottom, bottomY, fmt1(flap.toDouble()))
+        val xDim2 = xDim1 + dpF(26f)
+        drawVerticalDim(canvas, xDim2, topY, bottomY, fmt1((depthMm + flap * 2f).toDouble()))
     }
 
     private fun drawHorizontalDim(canvas: Canvas, x1: Float, x2: Float, y: Float, label: String) {
-        val ext = dpF(7f)
+        val ext = dpF(8f)
         canvas.drawLine(x1, y - ext, x1, y + ext, dimPaint)
         canvas.drawLine(x2, y - ext, x2, y + ext, dimPaint)
         canvas.drawLine(x1, y, x2, y, dimPaint)
-        drawHorizontalArrow(canvas, x1, y, pointsRight = true)
-        drawHorizontalArrow(canvas, x2, y, pointsRight = false)
+        drawArrowHead(canvas, x1, y, true, horizontal = true)
+        drawArrowHead(canvas, x2, y, false, horizontal = true)
         canvas.drawText(label, (x1 + x2) / 2f, y - dpF(4f), dimTextPaint)
     }
 
     private fun drawVerticalDim(canvas: Canvas, x: Float, y1: Float, y2: Float, label: String) {
-        val ext = dpF(7f)
+        val ext = dpF(8f)
         canvas.drawLine(x - ext, y1, x + ext, y1, dimPaint)
         canvas.drawLine(x - ext, y2, x + ext, y2, dimPaint)
         canvas.drawLine(x, y1, x, y2, dimPaint)
-        drawVerticalArrow(canvas, x, y1, pointsDown = true)
-        drawVerticalArrow(canvas, x, y2, pointsDown = false)
-
-        val cx = x + dpF(12f)
-        val cy = (y1 + y2) / 2f
+        drawArrowHead(canvas, x, y1, true, horizontal = false)
+        drawArrowHead(canvas, x, y2, false, horizontal = false)
         canvas.save()
-        canvas.rotate(90f, cx, cy)
-        canvas.drawText(label, cx, cy - dpF(3f), dimTextPaint)
+        canvas.rotate(90f, x + dpF(14f), (y1 + y2) / 2f)
+        canvas.drawText(label, x + dpF(14f), (y1 + y2) / 2f - dpF(3f), dimTextPaint)
         canvas.restore()
     }
 
-    private fun drawHorizontalArrow(canvas: Canvas, x: Float, y: Float, pointsRight: Boolean) {
+    private fun drawArrowHead(canvas: Canvas, x: Float, y: Float, inwardFromStart: Boolean, horizontal: Boolean) {
         val s = dpF(4f)
-        val d = if (pointsRight) 1f else -1f
-        canvas.drawLine(x, y, x + d * s, y - s / 2f, dimPaint)
-        canvas.drawLine(x, y, x + d * s, y + s / 2f, dimPaint)
-    }
-
-    private fun drawVerticalArrow(canvas: Canvas, x: Float, y: Float, pointsDown: Boolean) {
-        val s = dpF(4f)
-        val d = if (pointsDown) 1f else -1f
-        canvas.drawLine(x, y, x - s / 2f, y + d * s, dimPaint)
-        canvas.drawLine(x, y, x + s / 2f, y + d * s, dimPaint)
+        if (horizontal) {
+            val dir = if (inwardFromStart) 1f else -1f
+            canvas.drawLine(x, y, x + dir * s, y - s / 2f, dimPaint)
+            canvas.drawLine(x, y, x + dir * s, y + s / 2f, dimPaint)
+        } else {
+            val dir = if (inwardFromStart) 1f else -1f
+            canvas.drawLine(x, y, x - s / 2f, y + dir * s, dimPaint)
+            canvas.drawLine(x, y, x + s / 2f, y + dir * s, dimPaint)
+        }
     }
 
     private fun dpF(v: Float) = v * resources.displayMetrics.density

@@ -148,7 +148,7 @@ class MainActivity : Activity() {
         val search = EditText(this).apply {
             hint = "材質を検索"
             textSize = 16f
-            singleLine = true
+            setSingleLine(true)
             setPadding(dp(14), 0, dp(14), 0)
             background = fieldBackground()
         }
@@ -360,8 +360,8 @@ class CardboardBoxView(context: Context) : View(context) {
     var widthMm = 300; set(v) { field = max(v, 1); invalidate() }
     var depthMm = 250; set(v) { field = max(v, 1); invalidate() }
 
-    private var yaw = Math.toRadians(-32.0).toFloat()
-    private var pitch = Math.toRadians(22.0).toFloat()
+    private var yaw = Math.toRadians(32.0).toFloat()
+    private var pitch = Math.toRadians(-22.0).toFloat()
     private var lastX = 0f
     private var lastY = 0f
 

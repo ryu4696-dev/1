@@ -449,22 +449,26 @@ class DevelopmentView(context: Context) : View(context) {
         super.onDraw(canvas)
         canvas.drawText("展開", dpF(6f), dpF(16f), titlePaint)
 
-        // Customer-facing drawing uses nominal box dimensions.
-        // Glue flap is shown, but trim allowance and flute compensation are not.
+        // Excel準拠:
+        // 四面 = 巾 + panelAdjust
+        // 上下フラップ = (巾 + flapAdjust) / 2
+        // 落ち7mmは製造計算には使うが、この見せる図面には描かない。
         val glue = flute.glue.toFloat()
-        val flap = widthMm / 2f
+        val correctedFourth = (widthMm + flute.panelAdjust).coerceAtLeast(1).toFloat()
+        val flap = (widthMm + flute.flapAdjust) / 2f
         val panelWidths = floatArrayOf(
             lengthMm.toFloat(),
             widthMm.toFloat(),
             lengthMm.toFloat(),
-            widthMm.toFloat()
+            correctedFourth
         )
+
         val bodyWmm = panelWidths.sum()
         val drawingWmm = glue + bodyWmm
-        val drawingHmm = depthMm + widthMm
+        val drawingHmm = depthMm + flap * 2f
 
-        val leftPad = dpF(28f)
-        val rightPad = dpF(78f)
+        val leftPad = dpF(26f)
+        val rightPad = dpF(82f)
         val topPad = dpF(34f)
         val bottomPad = dpF(68f)
         val usableW = (width - leftPad - rightPad).coerceAtLeast(1f)
@@ -485,7 +489,7 @@ class DevelopmentView(context: Context) : View(context) {
         xs[0] = glueRight
         for (i in panelWidths.indices) xs[i + 1] = xs[i] + panelWidths[i] * scale
 
-        // Glue flap. Slightly clipped corners make it read as a real glue tab.
+        // のりしろ。形は残すが「糊代」という文字は出さない。
         val clip = min(dpF(6f), depthMm * scale * 0.12f)
         val gluePath = Path().apply {
             moveTo(glueRight, bodyTop)
@@ -497,7 +501,7 @@ class DevelopmentView(context: Context) : View(context) {
         canvas.drawPath(gluePath, fillPaint)
         canvas.drawPath(gluePath, outlinePaint)
 
-        // Four nominal body panels and their top/bottom flaps.
+        // 本体4面 + 上下フラップ
         for (i in 0..3) {
             val left = xs[i]
             val right = xs[i + 1]
@@ -511,7 +515,7 @@ class DevelopmentView(context: Context) : View(context) {
             canvas.drawRect(left, bodyBottom, right, bottomY, outlinePaint)
         }
 
-        // Fold scores only.
+        // 折り線
         canvas.drawLine(xs[0], bodyTop, xs[4], bodyTop, foldPaint)
         canvas.drawLine(xs[0], bodyBottom, xs[4], bodyBottom, foldPaint)
         for (i in 1..3) {
@@ -519,38 +523,45 @@ class DevelopmentView(context: Context) : View(context) {
         }
         canvas.drawLine(glueRight, bodyTop, glueRight, bodyBottom, foldPaint)
 
-        // CAD-like chain dimensions: glue / L / W / L / W.
+        // 連続寸法: のりしろ / 長 / 巾 / 長 / 補正後四面
         val chainY = bottomY + dpF(18f)
         drawHorizontalDim(canvas, glueLeft, glueRight, chainY, flute.glue.toString())
+
         val labels = listOf(
             lengthMm.toString(),
             widthMm.toString(),
             lengthMm.toString(),
-            widthMm.toString()
+            correctedFourth.roundToInt().toString()
         )
         for (i in 0..3) {
             drawHorizontalDim(canvas, xs[i], xs[i + 1], chainY, labels[i])
         }
 
-        // Overall horizontal dimension is the four nominal panels only.
+        // 本体4面の総寸法。落ち7mm・のりしろは含めない。
         val overallY = chainY + dpF(24f)
         drawHorizontalDim(
             canvas,
             xs[0],
             xs[4],
             overallY,
-            (2 * lengthMm + 2 * widthMm).toString()
+            bodyWmm.roundToInt().toString()
         )
 
-        // Vertical chain dimensions: W/2, D, W/2.
+        // 縦方向もExcelのフラップ補正値を使用。
         val xChain = xs[4] + dpF(18f)
         drawVerticalDim(canvas, xChain, topY, bodyTop, fmt1(flap.toDouble()))
         drawVerticalDim(canvas, xChain, bodyTop, bodyBottom, depthMm.toString())
         drawVerticalDim(canvas, xChain, bodyBottom, bottomY, fmt1(flap.toDouble()))
 
-        // Overall vertical dimension is nominal D + W only.
+        // 図面全体の縦寸法 = 上フラップ + 深 + 下フラップ
         val xOverall = xChain + dpF(30f)
-        drawVerticalDim(canvas, xOverall, topY, bottomY, (depthMm + widthMm).toString())
+        drawVerticalDim(
+            canvas,
+            xOverall,
+            topY,
+            bottomY,
+            fmt1((depthMm + flap * 2f).toDouble())
+        )
     }
 
     private fun drawHorizontalDim(canvas: Canvas, x1: Float, x2: Float, y: Float, label: String) {

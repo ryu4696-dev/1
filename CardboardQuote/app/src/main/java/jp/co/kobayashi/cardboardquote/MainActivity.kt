@@ -165,8 +165,13 @@ object Calculator {
         val candidates=(1..6).mapNotNull{up->val need=widthTotal*up+16;val paper=ceil(need/50.0).toInt()*50;if(paper<950||paper>2000)null else Triple(up,paper,paper-need)}
         require(candidates.isNotEmpty()){"紙巾950〜2000mmで丁取りできません"}
         val best=candidates.minWith(compareBy<Triple<Int,Int,Int>>{it.third}.thenBy{it.second}.thenByDescending{it.first})
-        fun ru3(v:Double)=ceil(v*1000.0)/1000.0; val totalArea=ru3(best.second/1000.0*flow/1000.0); val each=ru3(totalArea/best.first)
-        val mat=(if(i.flute==Flute.WF)i.material.wf else i.material.abc)+i.waterAdd; val unit=ceil(each*(mat+i.processRate)).toInt()
+        fun ru3(v:Double):Double {
+            return ceil(v*1000.0)/1000.0
+        }
+        val totalArea=ru3(best.second/1000.0*flow/1000.0)
+        val each=ru3(totalArea/best.first)
+        val mat=(if(i.flute==Flute.WF)i.material.wf else i.material.abc)+i.waterAdd
+        val unit=ceil(each*(mat+i.processRate)).toInt()
         return QuoteResult(best.second,best.first,each,unit,unit.toLong()*i.lot)
     }
 }

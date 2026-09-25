@@ -29,6 +29,8 @@ class MainActivity : Activity() {
     private lateinit var depthEdit: EditText
     private lateinit var processEdit: EditText
     private lateinit var unitText: TextView
+    private lateinit var detailCard: LinearLayout
+    private lateinit var detailText: TextView
 
     private var latestInput: QuoteInput? = null
     private var latestResult: QuoteResult? = null
@@ -109,6 +111,22 @@ class MainActivity : Activity() {
         unitText = label("— 円 / 個", 36, true, GREEN_DARK)
         priceCard.addView(unitText)
         root.addView(priceCard, lp(mt = 20))
+
+        detailCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(16), dp(18), dp(16))
+            background = roundedBg(Color.WHITE, radius = 16f)
+            visibility = View.GONE
+        }
+        detailCard.addView(label("計算詳細", 15, true))
+        detailText = TextView(this).apply {
+            textSize = 14f
+            setTextColor(TEXT)
+            setLineSpacing(dp(2).toFloat(), 1.1f)
+            setPadding(0, dp(10), 0, 0)
+        }
+        detailCard.addView(detailText)
+        root.addView(detailCard, lp(mt = 14))
 
         val calc = actionButton("計算する", primary = true)
         root.addView(calc, lp(mt = 14, h = 58))
@@ -192,6 +210,7 @@ class MainActivity : Activity() {
         latestInput = null
         latestResult = null
         if (::unitText.isInitialized) unitText.text = "— 円 / 個"
+        if (::detailCard.isInitialized) detailCard.visibility = View.GONE
     }
 
     private fun calculate(): Boolean = try {
@@ -207,10 +226,44 @@ class MainActivity : Activity() {
         latestInput = input
         latestResult = result
         unitText.text = "${nf(result.unitPrice)} 円 / 個"
+        detailText.text = buildDetailText(input, result)
+        detailCard.visibility = View.VISIBLE
         true
     } catch (e: Exception) {
         Toast.makeText(this, e.message ?: "入力を確認してください", Toast.LENGTH_SHORT).show()
         false
+    }
+
+    private fun buildDetailText(i: QuoteInput, r: QuoteResult): String {
+        val flap = (i.width + i.flute.flapAdjust) / 2.0
+        val panel4 = i.width + i.flute.panelAdjust
+        val materialRate = if (i.flute == Flute.WF) i.material.wf else i.material.abc
+        return listOf(
+            "展開寸法",
+            "糊代        ${i.flute.glue} mm",
+            "一面        ${i.length} mm",
+            "二面        ${i.width} mm",
+            "三面        ${i.length} mm",
+            "四面        $panel4 mm",
+            "落ち          7 mm",
+            "流れ合計    ${r.flowTotal} mm",
+            "",
+            "上フラップ  ${fmt1(flap)} mm",
+            "深          ${i.depth} mm",
+            "下フラップ  ${fmt1(flap)} mm",
+            "巾合計      ${fmt1(r.widthTotal)} mm",
+            "",
+            "製造計算",
+            "採用紙巾    ${r.paperWidth} mm",
+            "丁取り        ${r.up} 丁",
+            "全体面積    ${fmt3(r.totalArea)} ㎡",
+            "1個面積     ${fmt3(r.areaPerPiece)} ㎡",
+            "",
+            "単価計算",
+            "材質単価    ${fmt1(materialRate)} 円/㎡",
+            "加工賃      ${fmt1(i.processRate)} 円/㎡",
+            "合計単価    ${fmt1(materialRate + i.processRate)} 円/㎡"
+        ).joinToString("\n")
     }
 
     private fun showQuote() {
@@ -298,13 +351,25 @@ class QuoteActivity : Activity() {
             setPadding(dp(20), dp(24), dp(20), dp(24))
             setBackgroundColor(MainActivity.BG)
         }
-        setContentView(root)
+        setContentView(ScrollView(this).apply {
+            isFillViewport = true
+            addView(root)
+        })
 
         root.addView(CardboardBoxView(this).apply {
             lengthMm = l
             widthMm = w
             depthMm = d
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(385)))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(285)))
+
+        root.addView(DevelopmentView(this).apply {
+            lengthMm = l
+            widthMm = w
+            depthMm = d
+            this.flute = Flute.entries.firstOrNull { it.label == flute } ?: Flute.AF
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(300)).apply {
+            topMargin = dp(10)
+        })
 
         val materialLine = text("$material  $flute", 19, true, Gravity.CENTER)
         materialLine.setPadding(0, dp(8), 0, dp(4))
@@ -339,6 +404,128 @@ class QuoteActivity : Activity() {
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
     private fun nf(v: Number) = NumberFormat.getNumberInstance(Locale.JAPAN).format(v)
+}
+
+class DevelopmentView(context: Context) : View(context) {
+    var lengthMm = 400; set(v) { field = max(v, 1); invalidate() }
+    var widthMm = 300; set(v) { field = max(v, 1); invalidate() }
+    var depthMm = 250; set(v) { field = max(v, 1); invalidate() }
+    var flute: Flute = Flute.AF; set(v) { field = v; invalidate() }
+
+    private val paperPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(232, 207, 169)
+        style = Paint.Style.FILL
+    }
+    private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(91, 67, 43)
+        style = Paint.Style.STROKE
+        strokeWidth = dpF(1.35f)
+    }
+    private val foldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(129, 105, 75)
+        style = Paint.Style.STROKE
+        strokeWidth = dpF(1.0f)
+        pathEffect = DashPathEffect(floatArrayOf(dpF(4f), dpF(3f)), 0f)
+    }
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = MainActivity.TEXT
+        textSize = dpF(10.5f)
+        textAlign = Paint.Align.CENTER
+    }
+    private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = MainActivity.TEXT
+        textSize = dpF(13f)
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.LEFT
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        canvas.drawText("展開", dpF(4f), dpF(16f), titlePaint)
+
+        val glue = flute.glue.toFloat()
+        val p1 = lengthMm.toFloat()
+        val p2 = widthMm.toFloat()
+        val p3 = lengthMm.toFloat()
+        val p4 = (widthMm + flute.panelAdjust).toFloat()
+        val trim = 7f
+        val flap = (widthMm + flute.flapAdjust) / 2f
+        val body = depthMm.toFloat()
+        val widths = floatArrayOf(glue, p1, p2, p3, p4, trim)
+        val totalW = widths.sum()
+        val totalH = body + flap * 2f
+
+        val sidePad = dpF(8f)
+        val topPad = dpF(36f)
+        val bottomPad = dpF(48f)
+        val usableW = (width - sidePad * 2f).coerceAtLeast(1f)
+        val usableH = (height - topPad - bottomPad).coerceAtLeast(1f)
+        val scale = min(usableW / totalW, usableH / totalH)
+
+        val originX = sidePad + (usableW - totalW * scale) / 2f
+        val originY = topPad + (usableH - totalH * scale) / 2f
+        val bodyTop = originY + flap * scale
+        val bodyBottom = bodyTop + body * scale
+
+        val xs = FloatArray(7)
+        xs[0] = originX
+        for (i in widths.indices) xs[i + 1] = xs[i] + widths[i] * scale
+
+        // Body strip including glue and trim.
+        canvas.drawRect(originX, bodyTop, xs[6], bodyBottom, paperPaint)
+        canvas.drawRect(originX, bodyTop, xs[6], bodyBottom, outlinePaint)
+
+        // Top/bottom flaps on the four actual panels.
+        for (i in 1..4) {
+            canvas.drawRect(xs[i], originY, xs[i + 1], bodyTop, paperPaint)
+            canvas.drawRect(xs[i], bodyBottom, xs[i + 1], bodyBottom + flap * scale, paperPaint)
+
+            // Outer edges.
+            canvas.drawLine(xs[i], originY, xs[i + 1], originY, outlinePaint)
+            canvas.drawLine(xs[i], bodyBottom + flap * scale, xs[i + 1], bodyBottom + flap * scale, outlinePaint)
+            canvas.drawLine(xs[i], originY, xs[i], bodyTop, outlinePaint)
+            canvas.drawLine(xs[i + 1], originY, xs[i + 1], bodyTop, outlinePaint)
+            canvas.drawLine(xs[i], bodyBottom, xs[i], bodyBottom + flap * scale, outlinePaint)
+            canvas.drawLine(xs[i + 1], bodyBottom, xs[i + 1], bodyBottom + flap * scale, outlinePaint)
+        }
+
+        // Fold scores.
+        canvas.drawLine(xs[1], bodyTop, xs[5], bodyTop, foldPaint)
+        canvas.drawLine(xs[1], bodyBottom, xs[5], bodyBottom, foldPaint)
+        for (i in 1..5) canvas.drawLine(xs[i], bodyTop, xs[i], bodyBottom, foldPaint)
+
+        // Panel labels inside body.
+        val bodyLabelY = (bodyTop + bodyBottom) / 2f + dpF(4f)
+        val panelLabels = arrayOf(
+            "糊代\n${flute.glue}",
+            "長\n$lengthMm",
+            "巾\n$widthMm",
+            "長\n$lengthMm",
+            "巾\n${widthMm + flute.panelAdjust}",
+            "落ち\n7"
+        )
+        for (i in 0..5) {
+            drawTwoLineLabel(canvas, panelLabels[i], (xs[i] + xs[i + 1]) / 2f, bodyLabelY)
+        }
+
+        canvas.drawText("上フラップ ${fmt1(flap.toDouble())} mm", width / 2f, originY - dpF(7f), textPaint)
+        canvas.drawText("下フラップ ${fmt1(flap.toDouble())} mm", width / 2f, bodyBottom + flap * scale + dpF(17f), textPaint)
+        val flow = flute.glue + lengthMm + widthMm + lengthMm + (widthMm + flute.panelAdjust) + 7
+        val totalWidth = depthMm + widthMm + flute.flapAdjust
+        canvas.drawText("流れ $flow mm   /   巾 $totalWidth mm", width / 2f, height - dpF(7f), textPaint)
+    }
+
+    private fun drawTwoLineLabel(canvas: Canvas, text: String, x: Float, centerY: Float) {
+        val parts = text.split("\n")
+        if (parts.size == 1) {
+            canvas.drawText(parts[0], x, centerY, textPaint)
+        } else {
+            canvas.drawText(parts[0], x, centerY - dpF(5f), textPaint)
+            canvas.drawText(parts[1], x, centerY + dpF(8f), textPaint)
+        }
+    }
+
+    private fun dpF(v: Float) = v * resources.displayMetrics.density
 }
 
 /**
@@ -663,8 +850,11 @@ data class QuoteInput(
 )
 
 data class QuoteResult(
+    val flowTotal: Int,
+    val widthTotal: Double,
     val paperWidth: Int,
     val up: Int,
+    val totalArea: Double,
     val areaPerPiece: Double,
     val unitPrice: Int
 )
@@ -695,8 +885,11 @@ object Calculator {
         val unitPrice = ceil(areaPerPiece * (materialRate + i.processRate) - 1e-12).toInt()
 
         return QuoteResult(
+            flowTotal = flow,
+            widthTotal = widthTotal.toDouble(),
             paperWidth = best.paper,
             up = best.up,
+            totalArea = totalArea,
             areaPerPiece = areaPerPiece,
             unitPrice = unitPrice
         )
@@ -704,3 +897,9 @@ object Calculator {
 }
 
 private fun displayMaterial(name: String): String = name.replace('X', 'x')
+
+
+private fun fmt3(v: Double): String = String.format(Locale.JAPAN, "%.3f", v)
+private fun fmt1(v: Double): String =
+    if (abs(v - v.roundToInt()) < 0.001) v.roundToInt().toString()
+    else String.format(Locale.JAPAN, "%.1f", v)

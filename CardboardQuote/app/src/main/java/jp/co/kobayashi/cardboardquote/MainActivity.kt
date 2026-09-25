@@ -108,7 +108,7 @@ class MainActivity : Activity() {
             background = roundedBg(Color.WHITE, radius = 16f)
         }
         priceCard.addView(label("見積単価", 15, true))
-        unitText = label("— 円 / 個", 36, true, GREEN_DARK)
+        unitText = label("— 円", 36, true, GREEN_DARK)
         priceCard.addView(unitText)
         root.addView(priceCard, lp(mt = 20))
 
@@ -209,7 +209,7 @@ class MainActivity : Activity() {
     private fun invalidatePrice() {
         latestInput = null
         latestResult = null
-        if (::unitText.isInitialized) unitText.text = "— 円 / 個"
+        if (::unitText.isInitialized) unitText.text = "— 円"
         if (::detailCard.isInitialized) detailCard.visibility = View.GONE
     }
 
@@ -225,7 +225,7 @@ class MainActivity : Activity() {
         val result = Calculator.calculate(input)
         latestInput = input
         latestResult = result
-        unitText.text = "${nf(result.unitPrice)} 円 / 個"
+        unitText.text = "${nf(result.unitPrice)} 円"
         detailText.text = buildDetailText(input, result)
         detailCard.visibility = View.VISIBLE
         true
@@ -379,7 +379,7 @@ class QuoteActivity : Activity() {
         dimensionLine.setPadding(0, dp(4), 0, dp(16))
         root.addView(dimensionLine)
 
-        root.addView(text("${nf(unit)} 円 / 個", 42, true, Gravity.CENTER, MainActivity.GREEN_DARK))
+        root.addView(text("${nf(unit)} 円", 42, true, Gravity.CENTER, MainActivity.GREEN_DARK))
         root.addView(TextView(this).apply {
             text = "戻る"
             textSize = 17f

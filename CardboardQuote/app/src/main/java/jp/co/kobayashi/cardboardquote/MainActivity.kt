@@ -448,7 +448,6 @@ class DevelopmentView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         canvas.drawColor(Color.TRANSPARENT)
-        canvas.drawText("展開", dpF(6f), dpF(16f), titlePaint)
 
         val glue = flute.glue.toFloat()
         val panel4 = (widthMm + flute.panelAdjust).coerceAtLeast(1).toFloat()

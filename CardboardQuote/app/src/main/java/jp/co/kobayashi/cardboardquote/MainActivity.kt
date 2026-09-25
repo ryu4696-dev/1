@@ -355,27 +355,30 @@ class CardboardBoxView(context: Context) : View(context) {
     private var lastX = 0f
     private var lastY = 0f
 
-    private val texture = makeCardboardTexture(256)
+    private val texture = makeCardboardTexture(384)
     private val texturePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         shader = BitmapShader(texture, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
         isFilterBitmap = true
     }
     private val shadePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val edgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(94, 64, 38)
+        color = Color.rgb(93, 66, 43)
         style = Paint.Style.STROKE
-        strokeWidth = dpF(1.7f)
+        strokeWidth = dpF(1.55f)
         strokeJoin = Paint.Join.ROUND
+        strokeCap = Paint.Cap.ROUND
     }
-    private val creasePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(145, 91, 61, 34)
-        style = Paint.Style.STROKE
-        strokeWidth = dpF(1.1f)
-    }
-    private val cutPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(180, 81, 52, 31)
+    private val seamShadowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(170, 78, 54, 34)
         style = Paint.Style.STROKE
         strokeWidth = dpF(1.35f)
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val seamHighlightPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.argb(55, 255, 239, 210)
+        style = Paint.Style.STROKE
+        strokeWidth = dpF(0.7f)
+        strokeCap = Paint.Cap.ROUND
     }
 
     private data class V3(val x: Float, val y: Float, val z: Float)
@@ -453,7 +456,7 @@ class CardboardBoxView(context: Context) : View(context) {
         val cy = height / 2f + (minY + maxY) / 2f * scale
         val pts = rotated.map { P2(cx + it.x * scale, cy - it.y * scale, it.z) }
 
-        val light = normalize(V3(-0.40f, 0.90f, -0.55f))
+        val light = normalize(V3(-0.38f, 0.92f, -0.48f))
         val ordered = faces.map { face ->
             face to face.indices.map { pts[it].z }.average().toFloat()
         }.sortedByDescending { it.second }
@@ -461,54 +464,45 @@ class CardboardBoxView(context: Context) : View(context) {
         ordered.forEach { (face, _) ->
             val poly = face.indices.map { pts[it] }
             val path = poly.toPath()
+
             canvas.drawPath(path, texturePaint)
 
             val n = rotate(face.normal)
             val ndotl = (n.x * light.x + n.y * light.y + n.z * light.z).coerceIn(-1f, 1f)
             val shadeAlpha = when {
-                ndotl > 0.45f -> 10
-                ndotl > 0.05f -> 26
-                ndotl > -0.35f -> 46
-                else -> 70
+                ndotl > 0.55f -> 6
+                ndotl > 0.15f -> 20
+                ndotl > -0.25f -> 38
+                else -> 60
             }
-            shadePaint.color = Color.argb(shadeAlpha, 67, 43, 20)
+            shadePaint.color = Color.argb(shadeAlpha, 63, 41, 23)
             canvas.drawPath(path, shadePaint)
             canvas.drawPath(path, edgePaint)
 
-            when (face.id) {
-                "top" -> drawTopFlaps(canvas, poly)
-                "front", "back" -> drawVerticalJoint(canvas, poly)
-                "right", "left" -> drawSideFold(canvas, poly)
+            if (face.id == "top") {
+                drawClosedRscSeam(canvas, poly)
             }
         }
     }
 
-    private fun drawTopFlaps(canvas: Canvas, p: List<P2>) {
-        val nearMid = midpoint(p[0], p[1])
-        val farMid = midpoint(p[3], p[2])
-        canvas.drawLine(nearMid.x, nearMid.y, farMid.x, farMid.y, creasePaint)
+    private fun drawClosedRscSeam(canvas: Canvas, p: List<P2>) {
+        // RSCの外フラップは中央で合う。継ぎ目は長手方向に一本だけ。
+        val leftMid = midpoint(p[0], p[3])
+        val rightMid = midpoint(p[1], p[2])
 
-        listOf(0.22f, 0.78f).forEach { t ->
-            val near = lerp(p[0], p[1], t)
-            val far = lerp(p[3], p[2], t)
-            val mid = midpoint(near, far)
-            canvas.drawLine(near.x, near.y, mid.x, mid.y, cutPaint)
-            canvas.drawLine(far.x, far.y, mid.x, mid.y, cutPaint)
-        }
-    }
+        canvas.drawLine(leftMid.x, leftMid.y, rightMid.x, rightMid.y, seamShadowPaint)
 
-    private fun drawVerticalJoint(canvas: Canvas, p: List<P2>) {
-        val top = midpoint(p[2], p[3])
-        val bottom = midpoint(p[0], p[1])
-        val paint = Paint(creasePaint).apply { alpha = 65 }
-        canvas.drawLine(top.x, top.y, bottom.x, bottom.y, paint)
-    }
-
-    private fun drawSideFold(canvas: Canvas, p: List<P2>) {
-        val top = midpoint(p[2], p[3])
-        val bottom = midpoint(p[0], p[1])
-        val paint = Paint(creasePaint).apply { alpha = 48 }
-        canvas.drawLine(top.x, top.y, bottom.x, bottom.y, paint)
+        // 紙の折れ/段差をわずかに見せるための極細ハイライト。
+        val dx = rightMid.x - leftMid.x
+        val dy = rightMid.y - leftMid.y
+        val len = sqrt(dx * dx + dy * dy).coerceAtLeast(0.001f)
+        val ox = -dy / len * dpF(0.75f)
+        val oy = dx / len * dpF(0.75f)
+        canvas.drawLine(
+            leftMid.x + ox, leftMid.y + oy,
+            rightMid.x + ox, rightMid.y + oy,
+            seamHighlightPaint
+        )
     }
 
     private fun rotate(v: V3): V3 {
@@ -529,9 +523,6 @@ class CardboardBoxView(context: Context) : View(context) {
     private fun midpoint(a: P2, b: P2) =
         P2((a.x + b.x) / 2f, (a.y + b.y) / 2f, (a.z + b.z) / 2f)
 
-    private fun lerp(a: P2, b: P2, t: Float) =
-        P2(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t)
-
     private fun List<P2>.toPath() = Path().apply {
         moveTo(this@toPath[0].x, this@toPath[0].y)
         for (i in 1 until this@toPath.size) lineTo(this@toPath[i].x, this@toPath[i].y)
@@ -541,48 +532,62 @@ class CardboardBoxView(context: Context) : View(context) {
     private fun makeCardboardTexture(size: Int): Bitmap {
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(Color.rgb(197, 153, 99))
-        val random = Random(34192)
+        val random = Random(903241)
 
-        val fleck = Paint(Paint.ANTI_ALIAS_FLAG)
-        repeat(size * 10) {
-            val delta = random.nextInt(-20, 21)
-            fleck.color = Color.rgb(
-                (197 + delta).coerceIn(150, 226),
-                (153 + delta).coerceIn(112, 198),
-                (99 + delta / 2).coerceIn(65, 142)
+        // 未晒クラフトライナーのベース。彩度を抑えた黄褐色。
+        canvas.drawColor(Color.rgb(194, 151, 98))
+
+        // ごく細かい紙肌のムラ。遠目ではほぼ均一に見え、近くでだけ質感が出る。
+        val grain = Paint(Paint.ANTI_ALIAS_FLAG)
+        repeat(size * 16) {
+            val delta = random.nextInt(-15, 16)
+            grain.color = Color.rgb(
+                (194 + delta).coerceIn(164, 218),
+                (151 + delta).coerceIn(122, 185),
+                (98 + delta / 2).coerceIn(77, 128)
             )
-            fleck.alpha = random.nextInt(10, 34)
+            grain.alpha = random.nextInt(7, 22)
             val x = random.nextFloat() * size
             val y = random.nextFloat() * size
-            canvas.drawCircle(x, y, random.nextFloat() * 1.25f + 0.15f, fleck)
+            val r = random.nextFloat() * 0.75f + 0.12f
+            canvas.drawCircle(x, y, r, grain)
         }
 
-        val fiber = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            strokeWidth = 0.72f
-            color = Color.rgb(125, 88, 54)
+        // クラフト紙の短い繊維。線として目立たせず、薄く散らす。
+        val darkFiber = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(112, 82, 54)
+            strokeWidth = 0.45f
+            strokeCap = Paint.Cap.ROUND
         }
-        repeat(size * 2) {
-            fiber.alpha = random.nextInt(7, 25)
+        val lightFiber = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.rgb(229, 202, 163)
+            strokeWidth = 0.38f
+            strokeCap = Paint.Cap.ROUND
+        }
+        repeat(size * 3) {
             val x = random.nextFloat() * size
             val y = random.nextFloat() * size
-            val len = random.nextFloat() * 11f + 2f
-            val slope = random.nextFloat() * 0.22f - 0.11f
-            canvas.drawLine(x, y, x + len, y + len * slope, fiber)
+            val length = random.nextFloat() * 7f + 1.5f
+            val angle = random.nextFloat() * Math.PI.toFloat()
+            val dx = cos(angle) * length
+            val dy = sin(angle) * length * 0.35f
+
+            val paint = if (random.nextBoolean()) darkFiber else lightFiber
+            paint.alpha = random.nextInt(5, 18)
+            canvas.drawLine(x, y, x + dx, y + dy, paint)
         }
 
-        val pulp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(232, 205, 166) }
-        repeat(size / 2) {
-            pulp.alpha = random.nextInt(5, 18)
+        // パルプ由来の小さな明暗斑。規則的な線は描かない。
+        val pulp = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(238, 214, 179) }
+        repeat(size) {
+            pulp.alpha = random.nextInt(4, 13)
             val x = random.nextFloat() * size
             val y = random.nextFloat() * size
-            canvas.drawOval(
-                x, y,
-                x + random.nextFloat() * 5f + 1f,
-                y + random.nextFloat() * 1.4f + 0.3f,
-                pulp
-            )
+            val rx = random.nextFloat() * 2.3f + 0.4f
+            val ry = random.nextFloat() * 0.8f + 0.2f
+            canvas.drawOval(x - rx, y - ry, x + rx, y + ry, pulp)
         }
+
         return bitmap
     }
 

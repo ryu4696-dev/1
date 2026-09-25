@@ -367,19 +367,19 @@ class QuoteActivity : Activity() {
             widthMm = w
             depthMm = d
             this.flute = Flute.entries.firstOrNull { it.label == flute } ?: Flute.AF
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(300)).apply {
-            topMargin = dp(10)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(270)).apply {
+            topMargin = dp(0)
         })
 
-        val materialLine = text("$material  $flute", 19, true, Gravity.CENTER)
-        materialLine.setPadding(0, dp(8), 0, dp(4))
+        val materialLine = text("$material  $flute", 24, true, Gravity.CENTER)
+        materialLine.setPadding(0, dp(4), 0, dp(2))
         root.addView(materialLine)
 
-        val dimensionLine = text("$l × $w × $d mm", 26, true, Gravity.CENTER)
-        dimensionLine.setPadding(0, dp(4), 0, dp(16))
+        val dimensionLine = text("$l × $w × $d mm", 34, true, Gravity.CENTER)
+        dimensionLine.setPadding(0, dp(2), 0, dp(10))
         root.addView(dimensionLine)
 
-        root.addView(text("${nf(unit)} 円", 42, true, Gravity.CENTER, MainActivity.GREEN_DARK))
+        root.addView(text("${nf(unit)} 円", 58, true, Gravity.CENTER, MainActivity.GREEN_DARK))
         root.addView(TextView(this).apply {
             text = "戻る"
             textSize = 17f
@@ -438,6 +438,10 @@ class DevelopmentView(context: Context) : View(context) {
         textSize = dpF(10.5f)
         textAlign = Paint.Align.CENTER
     }
+    private val dimTextBgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = MainActivity.BG
+        style = Paint.Style.FILL
+    }
     private val titlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = MainActivity.TEXT
         textSize = dpF(13f)
@@ -458,9 +462,9 @@ class DevelopmentView(context: Context) : View(context) {
         val totalH = depthMm + flap * 2f
 
         val leftPad = dpF(22f)
-        val rightPad = dpF(84f)
-        val topPad = dpF(38f)
-        val bottomPad = dpF(66f)
+        val rightPad = dpF(104f)
+        val topPad = dpF(16f)
+        val bottomPad = dpF(58f)
         val usableW = (width - leftPad - rightPad).coerceAtLeast(1f)
         val usableH = (height - topPad - bottomPad).coerceAtLeast(1f)
         val scale = min(usableW / totalW, usableH / totalH)
@@ -535,11 +539,11 @@ class DevelopmentView(context: Context) : View(context) {
         drawHorizontalDim(canvas, glueLeft, xs[4], yDim2, flowDrawing.toString())
 
         // 縦寸法：Excel補正後フラップ / 深 / フラップ
-        val xDim1 = xs[4] + dpF(18f)
+        val xDim1 = xs[4] + dpF(20f)
         drawVerticalDim(canvas, xDim1, topY, bodyTop, fmt1(flap.toDouble()))
         drawVerticalDim(canvas, xDim1, bodyTop, bodyBottom, depthMm.toString())
         drawVerticalDim(canvas, xDim1, bodyBottom, bottomY, fmt1(flap.toDouble()))
-        val xDim2 = xDim1 + dpF(26f)
+        val xDim2 = xDim1 + dpF(42f)
         drawVerticalDim(canvas, xDim2, topY, bottomY, fmt1((depthMm + flap * 2f).toDouble()))
     }
 
@@ -550,7 +554,18 @@ class DevelopmentView(context: Context) : View(context) {
         canvas.drawLine(x1, y, x2, y, dimPaint)
         drawArrowHead(canvas, x1, y, true, horizontal = true)
         drawArrowHead(canvas, x2, y, false, horizontal = true)
-        canvas.drawText(label, (x1 + x2) / 2f, y - dpF(4f), dimTextPaint)
+        val cx = (x1 + x2) / 2f
+        val baseline = y - dpF(4f)
+        val fm = dimTextPaint.fontMetrics
+        val halfW = dimTextPaint.measureText(label) / 2f + dpF(2f)
+        canvas.drawRect(
+            cx - halfW,
+            baseline + fm.ascent - dpF(1f),
+            cx + halfW,
+            baseline + fm.descent + dpF(1f),
+            dimTextBgPaint
+        )
+        canvas.drawText(label, cx, baseline, dimTextPaint)
     }
 
     private fun drawVerticalDim(canvas: Canvas, x: Float, y1: Float, y2: Float, label: String) {

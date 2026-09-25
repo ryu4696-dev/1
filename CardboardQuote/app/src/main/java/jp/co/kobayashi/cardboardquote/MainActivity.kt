@@ -375,8 +375,8 @@ class QuoteActivity : Activity() {
         materialLine.setPadding(0, dp(8), 0, dp(4))
         root.addView(materialLine)
 
-        val dimensionLine = text("$l × $w × $d mm", 18, false, Gravity.CENTER)
-        dimensionLine.setPadding(0, 0, 0, dp(14))
+        val dimensionLine = text("$l × $w × $d mm", 26, true, Gravity.CENTER)
+        dimensionLine.setPadding(0, dp(4), 0, dp(16))
         root.addView(dimensionLine)
 
         root.addView(text("${nf(unit)} 円 / 個", 42, true, Gravity.CENTER, MainActivity.GREEN_DARK))

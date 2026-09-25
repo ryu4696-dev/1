@@ -412,22 +412,28 @@ class DevelopmentView(context: Context) : View(context) {
     var depthMm = 250; set(v) { field = max(v, 1); invalidate() }
     var flute: Flute = Flute.AF; set(v) { field = v; invalidate() }
 
-    private val paperPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(232, 207, 169)
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.rgb(233, 210, 176)
         style = Paint.Style.FILL
     }
     private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(91, 67, 43)
+        color = Color.rgb(103, 78, 52)
         style = Paint.Style.STROKE
         strokeWidth = dpF(1.35f)
+        strokeJoin = Paint.Join.MITER
     }
     private val foldPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.rgb(129, 105, 75)
+        color = Color.rgb(143, 119, 91)
         style = Paint.Style.STROKE
-        strokeWidth = dpF(1.0f)
+        strokeWidth = dpF(0.95f)
         pathEffect = DashPathEffect(floatArrayOf(dpF(4f), dpF(3f)), 0f)
     }
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val dimPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = MainActivity.TEXT
+        style = Paint.Style.STROKE
+        strokeWidth = dpF(0.9f)
+    }
+    private val dimTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = MainActivity.TEXT
         textSize = dpF(10.5f)
         textAlign = Paint.Align.CENTER
@@ -441,97 +447,155 @@ class DevelopmentView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        canvas.drawText("展開", dpF(4f), dpF(16f), titlePaint)
+        canvas.drawText("展開", dpF(6f), dpF(16f), titlePaint)
 
+        // Customer-facing drawing uses nominal box dimensions.
+        // Glue flap is shown, but trim allowance and flute compensation are not.
         val glue = flute.glue.toFloat()
-        val p1 = lengthMm.toFloat()
-        val p2 = widthMm.toFloat()
-        val p3 = lengthMm.toFloat()
-        val p4 = (widthMm + flute.panelAdjust).toFloat()
-        val trim = 7f
-        val flap = (widthMm + flute.flapAdjust) / 2f
-        val body = depthMm.toFloat()
-        val widths = floatArrayOf(glue, p1, p2, p3, p4, trim)
-        val totalW = widths.sum()
-        val totalH = body + flap * 2f
-
-        val sidePad = dpF(8f)
-        val topPad = dpF(36f)
-        val bottomPad = dpF(48f)
-        val usableW = (width - sidePad * 2f).coerceAtLeast(1f)
-        val usableH = (height - topPad - bottomPad).coerceAtLeast(1f)
-        val scale = min(usableW / totalW, usableH / totalH)
-
-        val originX = sidePad + (usableW - totalW * scale) / 2f
-        val originY = topPad + (usableH - totalH * scale) / 2f
-        val bodyTop = originY + flap * scale
-        val bodyBottom = bodyTop + body * scale
-
-        val xs = FloatArray(7)
-        xs[0] = originX
-        for (i in widths.indices) xs[i + 1] = xs[i] + widths[i] * scale
-
-        // Body strip including glue and trim.
-        canvas.drawRect(originX, bodyTop, xs[6], bodyBottom, paperPaint)
-        canvas.drawRect(originX, bodyTop, xs[6], bodyBottom, outlinePaint)
-
-        // Top/bottom flaps on the four actual panels.
-        for (i in 1..4) {
-            canvas.drawRect(xs[i], originY, xs[i + 1], bodyTop, paperPaint)
-            canvas.drawRect(xs[i], bodyBottom, xs[i + 1], bodyBottom + flap * scale, paperPaint)
-
-            // Outer edges.
-            canvas.drawLine(xs[i], originY, xs[i + 1], originY, outlinePaint)
-            canvas.drawLine(xs[i], bodyBottom + flap * scale, xs[i + 1], bodyBottom + flap * scale, outlinePaint)
-            canvas.drawLine(xs[i], originY, xs[i], bodyTop, outlinePaint)
-            canvas.drawLine(xs[i + 1], originY, xs[i + 1], bodyTop, outlinePaint)
-            canvas.drawLine(xs[i], bodyBottom, xs[i], bodyBottom + flap * scale, outlinePaint)
-            canvas.drawLine(xs[i + 1], bodyBottom, xs[i + 1], bodyBottom + flap * scale, outlinePaint)
-        }
-
-        // Fold scores.
-        canvas.drawLine(xs[1], bodyTop, xs[5], bodyTop, foldPaint)
-        canvas.drawLine(xs[1], bodyBottom, xs[5], bodyBottom, foldPaint)
-        for (i in 1..5) canvas.drawLine(xs[i], bodyTop, xs[i], bodyBottom, foldPaint)
-
-        // Panel labels inside body.
-        val bodyLabelY = (bodyTop + bodyBottom) / 2f + dpF(4f)
-        val panelLabels = arrayOf(
-            "糊代\n${flute.glue}",
-            "長\n$lengthMm",
-            "巾\n$widthMm",
-            "長\n$lengthMm",
-            "巾\n${widthMm + flute.panelAdjust}",
-            "落ち\n7"
+        val flap = widthMm / 2f
+        val panelWidths = floatArrayOf(
+            lengthMm.toFloat(),
+            widthMm.toFloat(),
+            lengthMm.toFloat(),
+            widthMm.toFloat()
         )
-        for (i in 0..5) {
-            drawTwoLineLabel(canvas, panelLabels[i], (xs[i] + xs[i + 1]) / 2f, bodyLabelY)
+        val bodyWmm = panelWidths.sum()
+        val drawingWmm = glue + bodyWmm
+        val drawingHmm = depthMm + widthMm
+
+        val leftPad = dpF(28f)
+        val rightPad = dpF(78f)
+        val topPad = dpF(34f)
+        val bottomPad = dpF(68f)
+        val usableW = (width - leftPad - rightPad).coerceAtLeast(1f)
+        val usableH = (height - topPad - bottomPad).coerceAtLeast(1f)
+        val scale = min(usableW / drawingWmm, usableH / drawingHmm)
+
+        val originX = leftPad + (usableW - drawingWmm * scale) / 2f
+        val originY = topPad + (usableH - drawingHmm * scale) / 2f
+        val topY = originY
+        val bodyTop = topY + flap * scale
+        val bodyBottom = bodyTop + depthMm * scale
+        val bottomY = bodyBottom + flap * scale
+
+        val glueLeft = originX
+        val glueRight = glueLeft + glue * scale
+
+        val xs = FloatArray(5)
+        xs[0] = glueRight
+        for (i in panelWidths.indices) xs[i + 1] = xs[i] + panelWidths[i] * scale
+
+        // Glue flap. Slightly clipped corners make it read as a real glue tab.
+        val clip = min(dpF(6f), depthMm * scale * 0.12f)
+        val gluePath = Path().apply {
+            moveTo(glueRight, bodyTop)
+            lineTo(glueRight, bodyBottom)
+            lineTo(glueLeft + dpF(2f), bodyBottom - clip)
+            lineTo(glueLeft + dpF(2f), bodyTop + clip)
+            close()
+        }
+        canvas.drawPath(gluePath, fillPaint)
+        canvas.drawPath(gluePath, outlinePaint)
+
+        // Four nominal body panels and their top/bottom flaps.
+        for (i in 0..3) {
+            val left = xs[i]
+            val right = xs[i + 1]
+
+            canvas.drawRect(left, bodyTop, right, bodyBottom, fillPaint)
+            canvas.drawRect(left, topY, right, bodyTop, fillPaint)
+            canvas.drawRect(left, bodyBottom, right, bottomY, fillPaint)
+
+            canvas.drawRect(left, bodyTop, right, bodyBottom, outlinePaint)
+            canvas.drawRect(left, topY, right, bodyTop, outlinePaint)
+            canvas.drawRect(left, bodyBottom, right, bottomY, outlinePaint)
         }
 
-        canvas.drawText("上フラップ ${fmt1(flap.toDouble())} mm", width / 2f, originY - dpF(7f), textPaint)
-        canvas.drawText("下フラップ ${fmt1(flap.toDouble())} mm", width / 2f, bodyBottom + flap * scale + dpF(17f), textPaint)
-        val flow = flute.glue + lengthMm + widthMm + lengthMm + (widthMm + flute.panelAdjust) + 7
-        val totalWidth = depthMm + widthMm + flute.flapAdjust
-        canvas.drawText("流れ $flow mm   /   巾 $totalWidth mm", width / 2f, height - dpF(7f), textPaint)
+        // Fold scores only.
+        canvas.drawLine(xs[0], bodyTop, xs[4], bodyTop, foldPaint)
+        canvas.drawLine(xs[0], bodyBottom, xs[4], bodyBottom, foldPaint)
+        for (i in 1..3) {
+            canvas.drawLine(xs[i], topY, xs[i], bottomY, foldPaint)
+        }
+        canvas.drawLine(glueRight, bodyTop, glueRight, bodyBottom, foldPaint)
+
+        // CAD-like chain dimensions: glue / L / W / L / W.
+        val chainY = bottomY + dpF(18f)
+        drawHorizontalDim(canvas, glueLeft, glueRight, chainY, flute.glue.toString())
+        val labels = listOf(
+            lengthMm.toString(),
+            widthMm.toString(),
+            lengthMm.toString(),
+            widthMm.toString()
+        )
+        for (i in 0..3) {
+            drawHorizontalDim(canvas, xs[i], xs[i + 1], chainY, labels[i])
+        }
+
+        // Overall horizontal dimension is the four nominal panels only.
+        val overallY = chainY + dpF(24f)
+        drawHorizontalDim(
+            canvas,
+            xs[0],
+            xs[4],
+            overallY,
+            (2 * lengthMm + 2 * widthMm).toString()
+        )
+
+        // Vertical chain dimensions: W/2, D, W/2.
+        val xChain = xs[4] + dpF(18f)
+        drawVerticalDim(canvas, xChain, topY, bodyTop, fmt1(flap.toDouble()))
+        drawVerticalDim(canvas, xChain, bodyTop, bodyBottom, depthMm.toString())
+        drawVerticalDim(canvas, xChain, bodyBottom, bottomY, fmt1(flap.toDouble()))
+
+        // Overall vertical dimension is nominal D + W only.
+        val xOverall = xChain + dpF(30f)
+        drawVerticalDim(canvas, xOverall, topY, bottomY, (depthMm + widthMm).toString())
     }
 
-    private fun drawTwoLineLabel(canvas: Canvas, text: String, x: Float, centerY: Float) {
-        val parts = text.split("\n")
-        if (parts.size == 1) {
-            canvas.drawText(parts[0], x, centerY, textPaint)
-        } else {
-            canvas.drawText(parts[0], x, centerY - dpF(5f), textPaint)
-            canvas.drawText(parts[1], x, centerY + dpF(8f), textPaint)
-        }
+    private fun drawHorizontalDim(canvas: Canvas, x1: Float, x2: Float, y: Float, label: String) {
+        val ext = dpF(7f)
+        canvas.drawLine(x1, y - ext, x1, y + ext, dimPaint)
+        canvas.drawLine(x2, y - ext, x2, y + ext, dimPaint)
+        canvas.drawLine(x1, y, x2, y, dimPaint)
+        drawHorizontalArrow(canvas, x1, y, pointsRight = true)
+        drawHorizontalArrow(canvas, x2, y, pointsRight = false)
+        canvas.drawText(label, (x1 + x2) / 2f, y - dpF(4f), dimTextPaint)
+    }
+
+    private fun drawVerticalDim(canvas: Canvas, x: Float, y1: Float, y2: Float, label: String) {
+        val ext = dpF(7f)
+        canvas.drawLine(x - ext, y1, x + ext, y1, dimPaint)
+        canvas.drawLine(x - ext, y2, x + ext, y2, dimPaint)
+        canvas.drawLine(x, y1, x, y2, dimPaint)
+        drawVerticalArrow(canvas, x, y1, pointsDown = true)
+        drawVerticalArrow(canvas, x, y2, pointsDown = false)
+
+        val cx = x + dpF(12f)
+        val cy = (y1 + y2) / 2f
+        canvas.save()
+        canvas.rotate(90f, cx, cy)
+        canvas.drawText(label, cx, cy - dpF(3f), dimTextPaint)
+        canvas.restore()
+    }
+
+    private fun drawHorizontalArrow(canvas: Canvas, x: Float, y: Float, pointsRight: Boolean) {
+        val s = dpF(4f)
+        val d = if (pointsRight) 1f else -1f
+        canvas.drawLine(x, y, x + d * s, y - s / 2f, dimPaint)
+        canvas.drawLine(x, y, x + d * s, y + s / 2f, dimPaint)
+    }
+
+    private fun drawVerticalArrow(canvas: Canvas, x: Float, y: Float, pointsDown: Boolean) {
+        val s = dpF(4f)
+        val d = if (pointsDown) 1f else -1f
+        canvas.drawLine(x, y, x - s / 2f, y + d * s, dimPaint)
+        canvas.drawLine(x, y, x + s / 2f, y + d * s, dimPaint)
     }
 
     private fun dpF(v: Float) = v * resources.displayMetrics.density
 }
 
-/**
- * 軽量なインタラクティブ3D箱表示。
- * X=長（正面横）、Z=巾（奥行き）、Y=深（高さ）として描画する。
- */
 class CardboardBoxView(context: Context) : View(context) {
     var lengthMm = 400; set(v) { field = max(v, 1); invalidate() }
     var widthMm = 300; set(v) { field = max(v, 1); invalidate() }

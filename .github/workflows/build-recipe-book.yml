@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rehydrate MariRecipe v1.1.7 source
+      - name: Rehydrate MariRecipe v1.2.0 source
         run: |
           cat .recipebook/v110.b64.0 .recipebook/v110.b64.1 .recipebook/v110.b64.2 > /tmp/recipe-v110.b64
           base64 -d /tmp/recipe-v110.b64 > /tmp/recipe-book-src-v1.1.0.zip
@@ -31,6 +31,7 @@ jobs:
           python3 .recipebook/v115.py
           python3 .recipebook/v116.py
           python3 .recipebook/v117.py
+          python3 .recipebook/v120-night-theme.py
 
       - uses: actions/setup-java@v4
         with:
@@ -54,10 +55,10 @@ jobs:
         run: gradle --no-daemon :app:assembleRelease
 
       - name: Rename APK
-        run: cp recipe-book/app/build/outputs/apk/release/app-release.apk MariRecipe-v1.1.7.apk
+        run: cp recipe-book/app/build/outputs/apk/release/app-release.apk MariRecipe-v1.2.0.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MariRecipe-v1.1.7-APK
-          path: MariRecipe-v1.1.7.apk
+          name: MariRecipe-v1.2.0-APK
+          path: MariRecipe-v1.2.0.apk
           if-no-files-found: error

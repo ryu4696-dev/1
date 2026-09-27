@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rehydrate MariRecipe v1.5.0 source
+      - name: Rehydrate MariRecipe v1.5.1 source
         run: |
           cat .recipebook/v110.b64.0 .recipebook/v110.b64.1 .recipebook/v110.b64.2 > /tmp/recipe-v110.b64
           base64 -d /tmp/recipe-v110.b64 > /tmp/recipe-book-src-v1.1.0.zip
@@ -57,15 +57,21 @@ jobs:
       - name: Install Android 36
         run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
+      - name: Configure stable signing
+        run: |
+          mkdir -p "$HOME/.android"
+          openssl pkcs12 -export             -inkey .recipebook/mari-signing-key.pem             -in .recipebook/mari-signing-cert.pem             -name androiddebugkey             -passout pass:android             -out /tmp/mari-debug.p12
+          keytool -importkeystore -noprompt             -srckeystore /tmp/mari-debug.p12             -srcstoretype PKCS12             -srcstorepass android             -srcalias androiddebugkey             -destkeystore "$HOME/.android/debug.keystore"             -deststorepass android             -destkeypass android             -destalias androiddebugkey
+
       - name: Build release APK
         working-directory: recipe-book
         run: gradle --no-daemon :app:assembleRelease
 
       - name: Rename APK
-        run: cp recipe-book/app/build/outputs/apk/release/app-release.apk MariRecipe-v1.5.0.apk
+        run: cp recipe-book/app/build/outputs/apk/release/app-release.apk MariRecipe-v1.5.1.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: MariRecipe-v1.5.0-APK
-          path: MariRecipe-v1.5.0.apk
+          name: MariRecipe-v1.5.1-APK
+          path: MariRecipe-v1.5.1.apk
           if-no-files-found: error

@@ -24,6 +24,7 @@ jobs:
           base64 -d /tmp/recipe.b64 > /tmp/recipe-book-src.zip
           echo "25c07aadd8b29e26a9ad76fe27729985e4e9bf093f86e1fa2c87e7429abff2fa  /tmp/recipe-book-src.zip" | sha256sum -c -
           unzip -q /tmp/recipe-book-src.zip -d .
+          python3 .recipebook/fix-v101-insets.py
 
       - uses: actions/setup-java@v4
         with:
@@ -47,10 +48,10 @@ jobs:
         run: gradle --no-daemon :app:assembleRelease
 
       - name: Rename APK
-        run: cp recipe-book/app/build/outputs/apk/release/app-release.apk RecipeStock-v1.0.0.apk
+        run: cp recipe-book/app/build/outputs/apk/release/app-release.apk RecipeStock-v1.0.1.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RecipeStock-APK
-          path: RecipeStock-v1.0.0.apk
+          name: RecipeStock-v1.0.1-APK
+          path: RecipeStock-v1.0.1.apk
           if-no-files-found: error

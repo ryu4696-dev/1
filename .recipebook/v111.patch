@@ -1,0 +1,164 @@
+--- recipe-book/app/src/main/java/dev/ryu4696/recipebook/MainActivity.java	2026-09-27 13:18:15.000000000 +0000
++++ recipe-book/app/src/main/java/dev/ryu4696/recipebook/MainActivity.java	2026-09-27 13:59:05.296977512 +0000
+@@ -43,9 +43,11 @@
+ import java.util.Collections;
+ import java.util.Comparator;
+ import java.util.Date;
++import java.util.HashMap;
+ import java.util.LinkedHashSet;
+ import java.util.List;
+ import java.util.Locale;
++import java.util.Map;
+ import java.util.Set;
+ 
+ public class MainActivity extends Activity {
+@@ -81,6 +83,7 @@
+     private int viewingSectionIndex = 0;
+     private int viewPage = 0;
+     private double viewMultiplier = 1.0;
++    private final Map<Integer, Integer> lastStepPageBySection = new HashMap<>();
+ 
+     @Override
+     protected void onCreate(Bundle savedInstanceState) {
+@@ -96,6 +99,7 @@
+         if ("home".equals(currentScreen)) {
+             super.onBackPressed();
+         } else if ("view".equals(currentScreen) && viewPage > 0) {
++            rememberCurrentStepPage();
+             viewPage = 0;
+             showRecipeView();
+         } else {
+@@ -223,6 +227,7 @@
+                 viewingSectionIndex = 0;
+                 viewPage = 0;
+                 viewMultiplier = 1.0;
++                lastStepPageBySection.clear();
+                 showRecipeView();
+             }));
+             buttons.addView(gapH());
+@@ -536,7 +541,7 @@
+             int idx = i;
+             AppDb.Section s = editingRecipe.sections.get(i);
+             Button tab = idx == editingSectionIndex
+-                    ? primaryButton(s.name, v -> {})
++                    ? selectedButton(s.name)
+                     : button(s.name, v -> { editingSectionIndex = idx; showEditRecipe(); });
+             tabs.addView(tab);
+             tabs.addView(gapH());
+@@ -791,7 +796,11 @@
+         LinearLayout nav = row();
+         nav.setGravity(Gravity.CENTER_VERTICAL);
+         if (viewPage > 0) {
+-            nav.addView(button("← 前へ", v -> { viewPage--; showRecipeView(); }));
++            nav.addView(button("← 前へ", v -> {
++                rememberCurrentStepPage();
++                viewPage--;
++                showRecipeView();
++            }));
+         } else {
+             View spacer = new View(this);
+             spacer.setLayoutParams(new LinearLayout.LayoutParams(dp(92), dp(48)));
+@@ -804,7 +813,15 @@
+         nav.addView(indicator);
+ 
+         if (viewPage < section.steps.size()) {
+-            Button next = primaryButton(viewPage == 0 ? "工程へ →" : "次へ →", v -> { viewPage++; showRecipeView(); });
++            Button next = primaryButton(viewPage == 0 ? "工程へ →" : "次へ →", v -> {
++                if (viewPage == 0) {
++                    viewPage = lastStepForSection(viewingSectionIndex, section.steps.size());
++                } else {
++                    viewPage++;
++                    rememberCurrentStepPage();
++                }
++                showRecipeView();
++            });
+             nav.addView(next);
+         } else {
+             View spacer = new View(this);
+@@ -816,6 +833,18 @@
+         setContentView(scroll(page));
+     }
+ 
++    private void rememberCurrentStepPage() {
++        if (viewPage > 0) lastStepPageBySection.put(viewingSectionIndex, viewPage);
++    }
++
++    private int lastStepForSection(int sectionIndex, int stepCount) {
++        if (stepCount <= 0) return 0;
++        int remembered = lastStepPageBySection.getOrDefault(sectionIndex, 1);
++        if (remembered < 1) remembered = 1;
++        if (remembered > stepCount) remembered = stepCount;
++        return remembered;
++    }
++
+     private void renderViewSectionTabs(LinearLayout page, AppDb.Recipe r) {
+         if (r.sections.size() <= 1) return;
+         HorizontalScrollView tabsScroll = new HorizontalScrollView(this);
+@@ -825,10 +854,17 @@
+             int idx = i;
+             AppDb.Section section = r.sections.get(i);
+             Button tab = idx == viewingSectionIndex
+-                    ? primaryButton(section.name, v -> {})
++                    ? selectedButton(section.name)
+                     : button(section.name, v -> {
++                        rememberCurrentStepPage();
++                        int samePage = viewPage;
+                         viewingSectionIndex = idx;
+-                        viewPage = 0;
++                        if (samePage > 0) {
++                            viewPage = Math.min(samePage, Math.max(1, r.sections.get(idx).steps.size()));
++                            lastStepPageBySection.put(idx, viewPage);
++                        } else {
++                            viewPage = 0;
++                        }
+                         showRecipeView();
+                     });
+             tabs.addView(tab);
+@@ -860,7 +896,7 @@
+         batch.setGravity(Gravity.CENTER_VERTICAL);
+ 
+         Button quarter = Math.abs(viewMultiplier - 0.25) < 0.0001
+-                ? primaryButton("1/4量", v -> {})
++                ? selectedButton("1/4量")
+                 : button("1/4量", v -> {});
+         quarter.setLayoutParams(new LinearLayout.LayoutParams(0, dp(48), 1f));
+         quarter.setOnClickListener(v -> { viewMultiplier = 0.25; showRecipeView(); });
+@@ -868,7 +904,7 @@
+         batch.addView(gapH());
+ 
+         Button half = Math.abs(viewMultiplier - 0.5) < 0.0001
+-                ? primaryButton("半量", v -> {})
++                ? selectedButton("半量")
+                 : button("半量", v -> {});
+         half.setLayoutParams(new LinearLayout.LayoutParams(0, dp(48), 1f));
+         half.setOnClickListener(v -> { viewMultiplier = 0.5; showRecipeView(); });
+@@ -1210,6 +1246,16 @@
+         return s;
+     }
+ 
++    private Button selectedButton(String s) {
++        Button b = baseButton("✓ " + s, null);
++        b.setTextColor(ACCENT);
++        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
++        b.setBackground(round(ACCENT_LIGHT, 11, ACCENT, 2));
++        b.setClickable(false);
++        b.setFocusable(false);
++        return b;
++    }
++
+     private Button primaryButton(String s, View.OnClickListener l) {
+         Button b = baseButton(s, l);
+         b.setTextColor(Color.WHITE);
+--- recipe-book/app/build.gradle	2026-09-27 13:18:15.000000000 +0000
++++ recipe-book/app/build.gradle	2026-09-27 13:59:05.297260265 +0000
+@@ -8,8 +8,8 @@
+         applicationId 'dev.ryu4696.recipestock'
+         minSdk 26
+         targetSdk 36
+-        versionCode 4
+-        versionName '1.1.0'
++        versionCode 5
++        versionName '1.1.1'
+     }
+ 
+     buildTypes {

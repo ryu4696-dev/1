@@ -37,6 +37,7 @@ jobs:
           python3 -m pip install --quiet pillow
           python3 .recipebook/v140-generate-art-assets.py
           python3 .recipebook/v140-image-theme.py
+          python3 .recipebook/v140-r-import-fix.py
 
       - uses: actions/setup-java@v4
         with:

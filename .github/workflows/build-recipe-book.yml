@@ -25,7 +25,7 @@ jobs:
           echo "cbdeec74d96e47ff91946982f5989a7cc4bd04b93738738381cbeca542cd16d2  /tmp/recipe-book-src-v1.1.0.zip" | sha256sum -c -
           unzip -q /tmp/recipe-book-src-v1.1.0.zip -d .
           patch -p0 < .recipebook/v111.patch
-          patch -p0 < .recipebook/v112.patch
+          python3 .recipebook/v112.py
 
       - uses: actions/setup-java@v4
         with:

@@ -3,7 +3,7 @@ from pathlib import Path
 root = Path("recipe-book")
 gradle = root / "app/build.gradle"
 g = gradle.read_text(encoding="utf-8")
-g = g.replace("versionCode 15\n        versionName '1.4.0'", "versionCode 16\n        versionName '1.5.0'")
+g = g.replace("versionCode 15\n        versionName '1.4.0'", "versionCode 17\n        versionName '1.5.1'")
 gradle.write_text(g, encoding="utf-8")
 
 java = root / "app/src/main/java/dev/ryu4696/recipebook/MainActivity.java"

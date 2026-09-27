@@ -18,14 +18,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rehydrate Recipe Stock source
+      - name: Rehydrate Recipe Stock v1.1.0 source
         run: |
-          cat .recipebook/src.b64.0 .recipebook/src.b64.1 .recipebook/src.b64.2 .recipebook/src.b64.3 .recipebook/src.b64.4 > /tmp/recipe.b64
-          base64 -d /tmp/recipe.b64 > /tmp/recipe-book-src.zip
-          echo "25c07aadd8b29e26a9ad76fe27729985e4e9bf093f86e1fa2c87e7429abff2fa  /tmp/recipe-book-src.zip" | sha256sum -c -
-          unzip -q /tmp/recipe-book-src.zip -d .
-          python3 .recipebook/fix-v101-insets.py
-          python3 .recipebook/fix-v102-ui.py
+          cat .recipebook/v110.b64.0 .recipebook/v110.b64.1 .recipebook/v110.b64.2 > /tmp/recipe-v110.b64
+          base64 -d /tmp/recipe-v110.b64 > /tmp/recipe-book-src-v1.1.0.zip
+          echo "cbdeec74d96e47ff91946982f5989a7cc4bd04b93738738381cbeca542cd16d2  /tmp/recipe-book-src-v1.1.0.zip" | sha256sum -c -
+          unzip -q /tmp/recipe-book-src-v1.1.0.zip -d .
 
       - uses: actions/setup-java@v4
         with:
@@ -49,10 +47,10 @@ jobs:
         run: gradle --no-daemon :app:assembleRelease
 
       - name: Rename APK
-        run: cp recipe-book/app/build/outputs/apk/release/app-release.apk RecipeStock-v1.0.2.apk
+        run: cp recipe-book/app/build/outputs/apk/release/app-release.apk RecipeStock-v1.1.0.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RecipeStock-v1.0.2-APK
-          path: RecipeStock-v1.0.2.apk
+          name: RecipeStock-v1.1.0-APK
+          path: RecipeStock-v1.1.0.apk
           if-no-files-found: error

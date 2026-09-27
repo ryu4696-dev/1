@@ -1,4 +1,4 @@
-name: Build Recipe Stock APK
+name: Build MariRecipe APK
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
       - '.github/workflows/build-recipe-book.yml'
 
 concurrency:
-  group: recipe-stock-${{ github.ref }}
+  group: marirecipe-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Rehydrate Recipe Stock v1.1.5 source
+      - name: Rehydrate MariRecipe v1.1.6 source
         run: |
           cat .recipebook/v110.b64.0 .recipebook/v110.b64.1 .recipebook/v110.b64.2 > /tmp/recipe-v110.b64
           base64 -d /tmp/recipe-v110.b64 > /tmp/recipe-book-src-v1.1.0.zip
@@ -29,6 +29,7 @@ jobs:
           python3 .recipebook/v113.py
           python3 .recipebook/v114.py
           python3 .recipebook/v115.py
+          python3 .recipebook/v116.py
 
       - uses: actions/setup-java@v4
         with:
@@ -52,10 +53,10 @@ jobs:
         run: gradle --no-daemon :app:assembleRelease
 
       - name: Rename APK
-        run: cp recipe-book/app/build/outputs/apk/release/app-release.apk RecipeStock-v1.1.5.apk
+        run: cp recipe-book/app/build/outputs/apk/release/app-release.apk MariRecipe-v1.1.6.apk
 
       - uses: actions/upload-artifact@v4
         with:
-          name: RecipeStock-v1.1.5-APK
-          path: RecipeStock-v1.1.5.apk
+          name: MariRecipe-v1.1.6-APK
+          path: MariRecipe-v1.1.6.apk
           if-no-files-found: error

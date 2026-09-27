@@ -32,6 +32,7 @@ jobs:
           python3 .recipebook/v116.py
           python3 .recipebook/v117.py
           python3 .recipebook/v130-full-visual-redesign.py
+          python3 .recipebook/v130-build-fix.py
 
       - uses: actions/setup-java@v4
         with:

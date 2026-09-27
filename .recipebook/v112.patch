@@ -1,0 +1,37 @@
+--- recipe-book/app/src/main/java/dev/ryu4696/recipebook/MainActivity.java
++++ recipe-book/app/src/main/java/dev/ryu4696/recipebook/MainActivity.java
+@@ -854,16 +854,14 @@
+             int idx = i;
+             AppDb.Section section = r.sections.get(i);
+             Button tab = idx == viewingSectionIndex
+                     ? selectedButton(section.name)
+                     : button(section.name, v -> {
+                         rememberCurrentStepPage();
+-                        int samePage = viewPage;
++                        boolean wasInSteps = viewPage > 0;
+                         viewingSectionIndex = idx;
+-                        if (samePage > 0) {
+-                            viewPage = Math.min(samePage, Math.max(1, r.sections.get(idx).steps.size()));
+-                            lastStepPageBySection.put(idx, viewPage);
+-                        } else {
+-                            viewPage = 0;
+-                        }
++                        viewPage = wasInSteps
++                                ? lastStepForSection(idx, r.sections.get(idx).steps.size())
++                                : 0;
+                         showRecipeView();
+                     });
+             tabs.addView(tab);
+--- recipe-book/app/build.gradle
++++ recipe-book/app/build.gradle
+@@ -8,8 +8,8 @@
+         applicationId 'dev.ryu4696.recipestock'
+         minSdk 26
+         targetSdk 36
+-        versionCode 5
+-        versionName '1.1.1'
++        versionCode 6
++        versionName '1.1.2'
+     }
+
+     buildTypes {

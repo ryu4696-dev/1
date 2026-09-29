@@ -34,7 +34,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path("qwenimage21/src/main/cpp/qwen_image21_diffusion.cpp")
+          p = Path("third_party/MNN/transformers/diffusion/engine/src/qwen_image21_diffusion.cpp")
           s = p.read_text()
           old = '''        std::string over = "{\\\"backend_type\\\":\\\"" + backend + "\\\",\\\"thread_num\\\":" +
                            std::to_string(backend == "cpu" ? mNumThreads : 68) + "}";

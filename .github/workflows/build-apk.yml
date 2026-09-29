@@ -29,6 +29,12 @@ jobs:
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
+      - name: Sync Qwen MNN source to current branch
+        working-directory: libQwenImage21
+        run: |
+          git -C third_party/MNN fetch origin qwen-image-21 --depth=1
+          git -C third_party/MNN checkout deec3b3ff369a08301e9caf66ecfa646f4382ffe
+          git -C third_party/MNN rev-parse HEAD
       - name: Patch low-memory text encoder
         working-directory: libQwenImage21
         run: |

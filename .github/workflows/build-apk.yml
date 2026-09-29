@@ -65,7 +65,12 @@ jobs:
               i += 1
           if not patched:
               raise SystemExit("encodePrompt patch target not found")
-          p.write_text("\n".join(out) + "\n")
+          s = "\n".join(out) + "\n"
+          s = s.replace('        if (!ensureMemory("DiT", ditNeedMB(L, N))) return false;\n',
+                        '        MNN_PRINT("[QwenImage21] DiT preflight bypassed for Android low-memory diagnostic\\n");\n')
+          s = s.replace('    if (!ensureMemory("DiT", ditNeedMB(P, mLatentH * mLatentW))) return false;\n',
+                        '    MNN_PRINT("[QwenImage21] DiT preflight bypassed for Android low-memory diagnostic\\n");\n')
+          p.write_text(s)
           print("patched", p)
           PY
       - name: Rebuild patched MNN for Android arm64
@@ -110,11 +115,11 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p out
-          cp libQwenImage21/demo/build/outputs/apk/debug/demo-debug.apk out/NoctQ-LowMemory-v2.apk
-          sha256sum out/NoctQ-LowMemory-v2.apk | tee out/SHA256.txt
+          cp libQwenImage21/demo/build/outputs/apk/debug/demo-debug.apk out/NoctQ-LowMemory-v3.apk
+          sha256sum out/NoctQ-LowMemory-v3.apk | tee out/SHA256.txt
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NoctQ-LowMemory-v2
+          name: NoctQ-LowMemory-v3
           path: out/
           if-no-files-found: error

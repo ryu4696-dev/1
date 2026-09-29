@@ -35,24 +35,31 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p = Path("third_party/MNN/transformers/diffusion/engine/src/qwen_image21_diffusion.cpp")
-          s = p.read_text()
-          old = '''        std::string over = "{\\\"backend_type\\\":\\\"" + backend + "\\\",\\\"thread_num\\\":" +
-                           std::to_string(backend == "cpu" ? mNumThreads : 68) + "}";
-          mTextEncoder->set_config(over);'''
-          new = '''        std::string over = "{\\\"backend_type\\\":\\\"" + backend + "\\\",\\\"thread_num\\\":" +
-                           std::to_string(backend == "cpu" ? mNumThreads : 68) +
-                           ",\\\"precision\\\":\\\"low\\\",\\\"memory\\\":\\\"low\\\",\\\"use_mmap\\\":true" +
-                           ",\\\"kvcache_mmap\\\":true,\\\"chunk\\\":64,\\\"tmp_path\\\":\\\"" +
-                           mModelPath + "/mmap_cache\\\"}";
-          mTextEncoder->set_config(over);'''
-          if old not in s:
+          lines = p.read_text().splitlines()
+          out = []
+          i = 0
+          patched = False
+          while i < len(lines):
+              if 'std::string over = "{\\\"backend_type' in lines[i]:
+                  out.extend([
+                      '        std::string over = "{\\\"backend_type\\\":\\\"" + backend + "\\\",\\\"thread_num\\\":" +',
+                      '                           std::to_string(backend == "cpu" ? mNumThreads : 68) +',
+                      '                           ",\\\"precision\\\":\\\"low\\\",\\\"memory\\\":\\\"low\\\",\\\"use_mmap\\\":true" +',
+                      '                           ",\\\"kvcache_mmap\\\":true,\\\"chunk\\\":64,\\\"tmp_path\\\":\\\"" +',
+                      '                           mModelPath + "/mmap_cache\\\"}";',
+                      '        mTextEncoder->set_config(over);',
+                  ])
+                  i += 3
+                  patched = True
+                  continue
+              line = lines[i]
+              if 'int teNeedMB(bool vision)' in line:
+                  line = 'int teNeedMB(bool vision) { return vision ? 3000 : 2200; }'
+              out.append(line)
+              i += 1
+          if not patched:
               raise SystemExit("encodePrompt patch target not found")
-          s = s.replace(old, new, 1)
-          s = s.replace(
-              'int teNeedMB(bool vision) { return vision ? 6100 : 5600; }',
-              'int teNeedMB(bool vision) { return vision ? 3000 : 2200; }'
-          )
-          p.write_text(s)
+          p.write_text("\n".join(out) + "\n")
           print("patched", p)
           PY
       - name: Build diagnostic APK

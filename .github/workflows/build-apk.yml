@@ -29,6 +29,32 @@ jobs:
           test -x "$SDKMANAGER"
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
+      - name: Patch low-memory text encoder
+        working-directory: libQwenImage21
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("qwenimage21/src/main/cpp/qwen_image21_diffusion.cpp")
+          s = p.read_text()
+          old = '''        std::string over = "{\\\"backend_type\\\":\\\"" + backend + "\\\",\\\"thread_num\\\":" +
+                           std::to_string(backend == "cpu" ? mNumThreads : 68) + "}";
+          mTextEncoder->set_config(over);'''
+          new = '''        std::string over = "{\\\"backend_type\\\":\\\"" + backend + "\\\",\\\"thread_num\\\":" +
+                           std::to_string(backend == "cpu" ? mNumThreads : 68) +
+                           ",\\\"precision\\\":\\\"low\\\",\\\"memory\\\":\\\"low\\\",\\\"use_mmap\\\":true" +
+                           ",\\\"kvcache_mmap\\\":true,\\\"chunk\\\":64,\\\"tmp_path\\\":\\\"" +
+                           mModelPath + "/mmap_cache\\\"}";
+          mTextEncoder->set_config(over);'''
+          if old not in s:
+              raise SystemExit("encodePrompt patch target not found")
+          s = s.replace(old, new, 1)
+          s = s.replace(
+              'int teNeedMB(bool vision) { return vision ? 6100 : 5600; }',
+              'int teNeedMB(bool vision) { return vision ? 3000 : 2200; }'
+          )
+          p.write_text(s)
+          print("patched", p)
+          PY
       - name: Build diagnostic APK
         working-directory: libQwenImage21
         run: |
@@ -37,11 +63,11 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p out
-          cp libQwenImage21/demo/build/outputs/apk/debug/demo-debug.apk out/NoctQ-Diagnostic-Qwen21.apk
-          sha256sum out/NoctQ-Diagnostic-Qwen21.apk | tee out/SHA256.txt
+          cp libQwenImage21/demo/build/outputs/apk/debug/demo-debug.apk out/NoctQ-LowMemory-v2.apk
+          sha256sum out/NoctQ-LowMemory-v2.apk | tee out/SHA256.txt
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NoctQ-Diagnostic-Qwen21
+          name: NoctQ-LowMemory-v2
           path: out/
           if-no-files-found: error

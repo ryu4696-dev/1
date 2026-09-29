@@ -62,6 +62,40 @@ jobs:
           p.write_text("\n".join(out) + "\n")
           print("patched", p)
           PY
+      - name: Rebuild patched MNN for Android arm64
+        working-directory: libQwenImage21
+        run: |
+          set -eux
+          export ANDROID_NDK=/usr/local/lib/android/sdk/ndk/28.2.13676358
+          export CMAKE=/usr/local/lib/android/sdk/cmake/3.22.1/bin/cmake
+          MNN="$PWD/third_party/MNN"
+          BUILD="$MNN/build_android_lowmem"
+          rm -rf "$BUILD"
+          mkdir -p "$BUILD"
+          cd "$BUILD"
+          "$CMAKE" .. \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK/build/cmake/android.toolchain.cmake" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_NATIVE_API_LEVEL=android-26 \
+            -DANDROID_STL=c++_shared \
+            -DMNN_USE_SSE=OFF \
+            -DMNN_BUILD_FOR_ANDROID_COMMAND=true \
+            -DMNN_LOW_MEMORY=ON \
+            -DMNN_CPU_WEIGHT_DEQUANT_GEMM=ON \
+            -DMNN_BUILD_DIFFUSION=ON \
+            -DMNN_BUILD_LLM=ON \
+            -DMNN_BUILD_OPENCV=ON \
+            -DMNN_IMGCODECS=ON \
+            -DMNN_OPENCL=ON \
+            -DMNN_SEP_BUILD=OFF \
+            -DMNN_SUPPORT_TRANSFORMER_FUSE=ON \
+            -DMNN_USE_LOGCAT=ON \
+            -DNATIVE_LIBRARY_OUTPUT=. \
+            -DNATIVE_INCLUDE_OUTPUT=.
+          "$CMAKE" --build . --target MNN -j 2
+          cp libMNN.so "$GITHUB_WORKSPACE/libQwenImage21/qwenimage21/src/main/jniLibs/arm64-v8a/libMNN.so"
+          ls -lh "$GITHUB_WORKSPACE/libQwenImage21/qwenimage21/src/main/jniLibs/arm64-v8a/libMNN.so"
       - name: Build diagnostic APK
         working-directory: libQwenImage21
         run: |

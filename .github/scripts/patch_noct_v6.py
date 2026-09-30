@@ -363,18 +363,37 @@ s = s.replace(anchor, anchor + '''
         animeMode.setChecked(prefs.getBoolean("animeMode", true));
         animeMode.setOnCheckedChangeListener((b, c) -> prefs.edit().putBoolean("animeMode", c).apply());''')
 
-# Replace anatomy prompt construction with Noct anime prefix + quality reminder.
-old = '''        final String userText = prompt.getText().toString().trim();
-        final String text = userText + "。人物が含まれる場合は、自然な人体構造、正しい関節、左右の手足が明確、手指の形が自然、顔と身体のつながりが自然、重複した手足や余分な指を避ける。";
-        addHistory(userText);'''
-new = '''        final String userText = prompt.getText().toString().trim();
-        String coreText = userText;
-        if (animeMode.isChecked()) coreText = "An anime illustration of " + coreText;
-        final String text = coreText + "。人物が含まれる場合は、成人として、自然な人体構造、正しい関節、左右の手足が明確、手指の形が自然、顔と身体のつながりが自然、重複した手足や余分な指を避ける。";
-        addHistory(userText);'''
-if old not in s:
-    raise SystemExit("v5.1 prompt block not found")
-s = s.replace(old, new, 1)
+# Replace the v5.1 prompt construction robustly. The workflow-generated
+# source has changed indentation/line wrapping a few times, so match the
+# semantic anchors rather than one exact multiline literal.
+src_lines = s.splitlines()
+out_lines = []
+i = 0
+prompt_patched = False
+while i < len(src_lines):
+    line = src_lines[i]
+    if 'final String userText = prompt.getText().toString().trim();' in line:
+        indent = line[:len(line) - len(line.lstrip())]
+        out_lines.append(line)
+        j = i + 1
+        while j < len(src_lines) and 'addHistory(' not in src_lines[j]:
+            j += 1
+        if j >= len(src_lines):
+            raise SystemExit("addHistory after userText not found")
+        out_lines.extend([
+            indent + 'String coreText = userText;',
+            indent + 'if (animeMode.isChecked()) coreText = "An anime illustration of " + coreText;',
+            indent + 'final String text = coreText + "。人物が含まれる場合は、成人として、自然な人体構造、正しい関節、左右の手足が明確、手指の形が自然、顔と身体のつながりが自然、重複した手足や余分な指を避ける。";',
+            indent + 'addHistory(userText);',
+        ])
+        i = j + 1
+        prompt_patched = True
+        continue
+    out_lines.append(line)
+    i += 1
+if not prompt_patched:
+    raise SystemExit("v5.1 userText prompt anchor not found")
+s = "\n".join(out_lines) + "\n"
 
 # Require Noct installation before generation.
 needle = '    private void startGeneration() {\n        if (!refreshModelStatus()) return;'

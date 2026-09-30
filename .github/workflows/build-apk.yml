@@ -1,4 +1,4 @@
-name: Build NoctQ Mobile v5 APK
+name: Build NoctQ Mobile v5.1 APK
 on:
   workflow_dispatch:
   push:
@@ -223,9 +223,9 @@ jobs:
           # Default to a practical fast preset once for v5.
           anchor = 'if (turbo.isChecked()) steps.setText("6");'
           s = s.replace(anchor, anchor + '''
-              if (!prefs.getBoolean("v5_defaults", false)) {
-                  applyPreset(0);
-                  prefs.edit().putBoolean("v5_defaults", true).apply();
+              if (!prefs.getBoolean("v51_defaults", false)) {
+                  applyPreset(2);
+                  prefs.edit().putBoolean("v51_defaults", true).apply();
               }''')
 
           s = s.replace(
@@ -296,23 +296,24 @@ jobs:
                       if (QwenImage21.missingTurboDitFiles(modelDir) == null) {
                           tier.setSelection(1);
                           turbo.setChecked(true);
-                          status.setText("高速モード：Turbo 6step / Fast 384");
+                          status.setText("高速モード：Turbo 6step / Fast 384（6step専用モデル）");
                       } else {
-                          tier.setSelection(2);
+                          tier.setSelection(1);
                           turbo.setChecked(false);
-                          steps.setText("8");
-                          status.setText("高速モード：Tiny 320 / 8step（Turbo導入でさらに高速化できます）");
+                          steps.setText("20");
+                          showError("高速モデルが必要です", "人物品質を崩さないため、通常モデルを8stepには落としません。モデル管理で高速Turboモデルをダウンロードしてください。");
+                          status.setText("安全設定：Fast 384 / 20step");
                       }
                   } else if (mode == 1) {
                       tier.setSelection(1);
                       turbo.setChecked(false);
-                      steps.setText("12");
-                      status.setText("標準モード：Fast 384 / 12step");
+                      steps.setText("20");
+                      status.setText("標準モード：Fast 384 / 20step");
                   } else {
-                      tier.setSelection(1);
+                      tier.setSelection(0);
                       turbo.setChecked(false);
                       steps.setText("20");
-                      status.setText("高品質モード：Fast 384 / 20step（実機完走確認済み）");
+                      status.setText("高品質モード：Standard 512 / 20step");
                   }
               }
 
@@ -359,7 +360,7 @@ jobs:
                   <TextView
                       android:layout_width="wrap_content"
                       android:layout_height="wrap_content"
-                      android:text="NoctQ Mobile v5 · ローカル画像生成"
+                      android:text="NoctQ Mobile v5.1 · ローカル画像生成"
                       android:textSize="22sp"
                       android:textStyle="bold" />
 
@@ -502,7 +503,7 @@ jobs:
           m = m.replace('<uses-permission android:name="android.permission.INTERNET" />',
                         '<uses-permission android:name="android.permission.INTERNET" />\n'
                         '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />')
-          m = m.replace('android:label="Qwen-Image 2.1"', 'android:label="NoctQ Mobile v5"')
+          m = m.replace('android:label="Qwen-Image 2.1"', 'android:label="NoctQ Mobile v5.1"')
           manifest.write_text(m)
           PY
       - name: Restore proven v4 low-memory MNN
@@ -528,11 +529,11 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p out
-          cp libQwenImage21/demo/build/outputs/apk/debug/demo-debug.apk out/NoctQ-Mobile-v5.apk
-          sha256sum out/NoctQ-Mobile-v5.apk | tee out/SHA256.txt
+          cp libQwenImage21/demo/build/outputs/apk/debug/demo-debug.apk out/NoctQ-Mobile-v5.1.apk
+          sha256sum out/NoctQ-Mobile-v5.1.apk | tee out/SHA256.txt
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NoctQ-Mobile-v5
+          name: NoctQ-Mobile-v5.1
           path: out/
           if-no-files-found: error

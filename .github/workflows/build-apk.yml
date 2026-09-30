@@ -254,27 +254,23 @@ jobs:
           s = s.replace('options.keepModelsLoaded = keep.isChecked();', 'options.keepModelsLoaded = false;')
 
           # Public gallery save after successful generation.
-          old_success = '''                if (result != null) {
-                      image.setImageBitmap(result);
-                      status.setText(String.format("Done in %.1f s (seed %d)\\n%s", sec, nSeed, out));
-                  } else if (err != null && err.isOutOfMemory()) {'''
-          new_success = '''                if (result != null) {
-                      image.setImageBitmap(result);
-                      lastOutputFile = out;
-                      try {
-                          lastSavedUri = GalleryUtil.save(this, out, nSeed);
-                          saveImage.setEnabled(true);
-                          shareImage.setEnabled(true);
-                          status.setText(String.format("生成完了 %.1f秒（seed %d）\\nPictures/NoctQ に保存しました", sec, nSeed));
-                      } catch (Exception saveError) {
-                          saveImage.setEnabled(true);
-                          shareImage.setEnabled(false);
-                          status.setText(String.format("生成完了 %.1f秒（seed %d）\\n画像の保存に失敗: %s", sec, nSeed, saveError.getMessage()));
-                      }
-                  } else if (err != null && err.isOutOfMemory()) {'''
+          old_success = '''                    image.setImageBitmap(result);
+                    status.setText(String.format("Done in %.1f s (seed %d)\\n%s", sec, nSeed, out));'''
+          new_success = '''                    image.setImageBitmap(result);
+                    lastOutputFile = out;
+                    try {
+                        lastSavedUri = GalleryUtil.save(this, out, nSeed);
+                        saveImage.setEnabled(true);
+                        shareImage.setEnabled(true);
+                        status.setText(String.format("生成完了 %.1f秒（seed %d）\\nPictures/NoctQ に保存しました", sec, nSeed));
+                    } catch (Exception saveError) {
+                        saveImage.setEnabled(true);
+                        shareImage.setEnabled(false);
+                        status.setText(String.format("生成完了 %.1f秒（seed %d）\\n画像の保存に失敗: %s", sec, nSeed, saveError.getMessage()));
+                    }'''
           if old_success not in s:
-              raise SystemExit("generation success patch target not found")
-          s = s.replace(old_success, new_success)
+              raise SystemExit("generation success lines not found")
+          s = s.replace(old_success, new_success, 1)
 
           # Insert preset/save/share methods before showError.
           marker = '    private void showError(String title, String message) {'

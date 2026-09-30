@@ -463,8 +463,8 @@ rep = '''    private boolean refreshModelStatus() {
         if (NoctModelDownloader.installed(modelDir)) {
             String missingEdit = QwenImage21.missingEditFiles(modelDir);
             status.setText("モデル: Noct-Q Anime V1 / MNN INT4"
-                    + (missingEdit != null ? "\n画像編集の追加ファイル不足: " + missingEdit : "")
-                    + "\n空きメモリ: " + QwenImage21.availableMemoryMB() + " MB");
+                    + (missingEdit != null ? "\\n画像編集の追加ファイル不足: " + missingEdit : "")
+                    + "\\n空きメモリ: " + QwenImage21.availableMemoryMB() + " MB");
             return true;
         }
 '''

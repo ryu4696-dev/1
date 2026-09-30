@@ -473,27 +473,35 @@ if needle not in s:
 s = s.replace(needle, rep, 1)
 
 # Presets: Noct is not distilled. Do not repeat the 8-step anatomy mistake.
-start = s.index('              private void applyPreset(int mode) {')
-end = s.index('              private void saveLastImage()', start)
-newpreset = r'''              private void applyPreset(int mode) {
-                  keep.setChecked(false);
-                  gpu.setChecked(false);
-                  teCpu.setChecked(true);
-                  turbo.setChecked(false);
-                  if (mode == 0) {
-                      tier.setSelection(1);
-                      steps.setText("16");
-                      status.setText("省時間：Fast 384 / 16step（Noct-Q・非Turbo）");
-                  } else if (mode == 1) {
-                      tier.setSelection(1);
-                      steps.setText("20");
-                      status.setText("標準：Fast 384 / 20step");
-                  } else {
-                      tier.setSelection(1);
-                      steps.setText("25");
-                      status.setText("高品質：Fast 384 / 25step（Noct-Q推奨step数）");
-                  }
-              }
+needle = 'private void applyPreset(int mode) {'
+pos = s.find(needle)
+if pos < 0:
+    raise SystemExit("applyPreset method not found")
+start = s.rfind("\n", 0, pos) + 1
+next_pos = s.find('private void saveLastImage()', pos)
+if next_pos < 0:
+    raise SystemExit("saveLastImage method after applyPreset not found")
+end = s.rfind("\n", 0, next_pos) + 1
+indent = s[start:pos]
+newpreset = indent + '''private void applyPreset(int mode) {
+''' + indent + '''    keep.setChecked(false);
+''' + indent + '''    gpu.setChecked(false);
+''' + indent + '''    teCpu.setChecked(true);
+''' + indent + '''    turbo.setChecked(false);
+''' + indent + '''    if (mode == 0) {
+''' + indent + '''        tier.setSelection(1);
+''' + indent + '''        steps.setText("16");
+''' + indent + '''        status.setText("省時間：Fast 384 / 16step（Noct-Q・非Turbo）");
+''' + indent + '''    } else if (mode == 1) {
+''' + indent + '''        tier.setSelection(1);
+''' + indent + '''        steps.setText("20");
+''' + indent + '''        status.setText("標準：Fast 384 / 20step");
+''' + indent + '''    } else {
+''' + indent + '''        tier.setSelection(1);
+''' + indent + '''        steps.setText("25");
+''' + indent + '''        status.setText("高品質：Fast 384 / 25step（Noct-Q推奨step数）");
+''' + indent + '''    }
+''' + indent + '''}
 
 '''
 s = s[:start] + newpreset + s[end:]

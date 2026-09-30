@@ -1,4 +1,4 @@
-name: Build Qwen Image 2.1 Android Diagnostic APK
+name: Build NoctQ Mobile v5 APK
 on:
   workflow_dispatch:
   push:
@@ -98,6 +98,404 @@ jobs:
           p.write_text(s)
           print("forced CPU DiT + Memory_Low")
           PY
+      - name: Build Japanese practical UI with gallery save/share
+        working-directory: libQwenImage21
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # ---------- Gallery helper ----------
+          helper = r'''package com.scsonic.qwenimage21.demo;
+
+          import android.app.Activity;
+          import android.content.ContentValues;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.provider.MediaStore;
+
+          import java.io.File;
+          import java.io.FileInputStream;
+          import java.io.OutputStream;
+          import java.text.SimpleDateFormat;
+          import java.util.Date;
+          import java.util.Locale;
+
+          final class GalleryUtil {
+              private GalleryUtil() {}
+
+              static Uri save(Activity activity, File src, int seed) throws Exception {
+                  if (Build.VERSION.SDK_INT < 29) {
+                      throw new IllegalStateException("Android 10以降が必要です");
+                  }
+                  String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.JAPAN).format(new Date());
+                  String name = "NoctQ_" + stamp + "_seed" + seed + ".png";
+                  ContentValues values = new ContentValues();
+                  values.put(MediaStore.Images.Media.DISPLAY_NAME, name);
+                  values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+                  values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/NoctQ");
+                  values.put(MediaStore.Images.Media.IS_PENDING, 1);
+                  Uri uri = activity.getContentResolver().insert(
+                          MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                  if (uri == null) throw new IllegalStateException("保存先を作成できませんでした");
+                  try (FileInputStream in = new FileInputStream(src);
+                       OutputStream out = activity.getContentResolver().openOutputStream(uri)) {
+                      if (out == null) throw new IllegalStateException("保存先を開けませんでした");
+                      byte[] buf = new byte[1 << 16];
+                      int n;
+                      while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                  } catch (Exception e) {
+                      activity.getContentResolver().delete(uri, null, null);
+                      throw e;
+                  }
+                  values.clear();
+                  values.put(MediaStore.Images.Media.IS_PENDING, 0);
+                  activity.getContentResolver().update(uri, values, null, null);
+                  return uri;
+              }
+
+              static void share(Activity activity, Uri uri) {
+                  Intent i = new Intent(Intent.ACTION_SEND);
+                  i.setType("image/png");
+                  i.putExtra(Intent.EXTRA_STREAM, uri);
+                  i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                  activity.startActivity(Intent.createChooser(i, "画像を共有"));
+              }
+          }
+          '''
+          Path("demo/src/main/java/com/scsonic/qwenimage21/demo/GalleryUtil.java").write_text(helper)
+
+          # ---------- MainActivity patch ----------
+          p = Path("demo/src/main/java/com/scsonic/qwenimage21/demo/MainActivity.java")
+          s = p.read_text()
+
+          s = s.replace(
+              'private Button tabT2i, tabI2i, download, generate, pick2, clear2;',
+              'private Button tabT2i, tabI2i, download, generate, pick2, clear2, presetFast, presetNormal, presetQuality, saveImage, shareImage;'
+          )
+          s = s.replace(
+              'private String stepsBeforeTurbo = "20";',
+              'private String stepsBeforeTurbo = "20";\n    private Uri lastSavedUri;\n    private File lastOutputFile;'
+          )
+
+          s = s.replace(
+              'ratio.setAdapter(spinnerAdapter(QwenImage21.Size.Ratio.values()));\n        tier.setAdapter(spinnerAdapter(QwenImage21.Size.Tier.values()));',
+              'ratio.setAdapter(spinnerAdapter(new String[]{"正方形 1:1", "横 4:3", "縦 3:4", "横 3:2", "縦 2:3", "横長 16:9", "縦長 9:16"}));\n'
+              '        tier.setAdapter(spinnerAdapter(new String[]{"高品質 512", "高速 384", "軽量 320"}));'
+          )
+          s = s.replace('tier.setSelection(prefs.getInt("tier", 0));',
+                        'tier.setSelection(prefs.getInt("tier", 1));')
+
+          s = s.replace(
+              'prompt.setText(history.isEmpty()\n                ? "A cozy coffee shop on a rainy evening, warm light, a sign that reads \\"QWEN\\"" : history.get(0));',
+              'prompt.setText(history.isEmpty()\n                ? "雨の夕方の落ち着いた喫茶店。暖色の照明。窓の外には雨。自然で写実的な写真。" : history.get(0));'
+          )
+
+          anchor = 'generate = findViewById(R.id.generate);'
+          s = s.replace(anchor, anchor + '''
+              presetFast = findViewById(R.id.preset_fast);
+              presetNormal = findViewById(R.id.preset_normal);
+              presetQuality = findViewById(R.id.preset_quality);
+              saveImage = findViewById(R.id.save_image);
+              shareImage = findViewById(R.id.share_image);''')
+
+          anchor = 'generate.setOnClickListener(v -> startGeneration());'
+          s = s.replace(anchor, anchor + '''
+              presetFast.setOnClickListener(v -> applyPreset(0));
+              presetNormal.setOnClickListener(v -> applyPreset(1));
+              presetQuality.setOnClickListener(v -> applyPreset(2));
+              saveImage.setOnClickListener(v -> saveLastImage());
+              shareImage.setOnClickListener(v -> shareLastImage());
+              saveImage.setEnabled(false);
+              shareImage.setEnabled(false);''')
+
+          s = s.replace(
+              'dlStandard.setText(String.format("Standard (dit.mnn) — %.1f GB",',
+              'dlStandard.setText(String.format("通常モデル (dit.mnn) — %.1f GB",'
+          )
+          s = s.replace(
+              'dlTurbo.setText(String.format("Turbo (dit_turbo.mnn) — %.1f GB, 6 fixed steps",',
+              'dlTurbo.setText(String.format("高速Turboモデル (dit_turbo.mnn) — %.1f GB / 6step",'
+          )
+          s = s.replace('prefs.getBoolean("dlStandard", true)', 'prefs.getBoolean("dlStandard", false)')
+          s = s.replace('prefs.getBoolean("dlTurbo", false)', 'prefs.getBoolean("dlTurbo", true)')
+
+          # Default to a practical fast preset once for v5.
+          anchor = 'if (turbo.isChecked()) steps.setText("6");'
+          s = s.replace(anchor, anchor + '''
+              if (!prefs.getBoolean("v5_defaults", false)) {
+                  applyPreset(0);
+                  prefs.edit().putBoolean("v5_defaults", true).apply();
+              }''')
+
+          s = s.replace(
+              'return QwenImage21.Size.of((QwenImage21.Size.Ratio) ratio.getSelectedItem(),\n                (QwenImage21.Size.Tier) tier.getSelectedItem());',
+              'return QwenImage21.Size.of(QwenImage21.Size.Ratio.values()[ratio.getSelectedItemPosition()],\n'
+              '                QwenImage21.Size.Tier.values()[tier.getSelectedItemPosition()]);'
+          )
+          s = s.replace(
+              'return (QwenImage21.Size.Tier) tier.getSelectedItem();',
+              'return QwenImage21.Size.Tier.values()[tier.getSelectedItemPosition()];'
+          )
+          s = s.replace(
+              'sizeInfo.setText(String.format("Output %d×%d · %d latent tokens per step", s.width, s.height, s.tokens()));',
+              'sizeInfo.setText(String.format("出力 %d×%d ・ 1stepあたり %d token", s.width, s.height, s.tokens()));'
+          )
+
+          s = s.replace('generate.setText(edit ? "Edit image" : "Generate");',
+                        'generate.setText(edit ? "画像を編集する" : "画像を生成する");')
+          s = s.replace(
+              'prompt.setHint(edit ? "Describe the edit, e.g. \\"Change the background to a sunset beach\\"" : "Prompt");',
+              'prompt.setHint(edit ? "編集内容を日本語で入力 例：背景を夕焼けの海辺に変更" : "生成したい内容を日本語で入力");'
+          )
+
+          # The device-proven route is CPU low-memory; make Java agree with the native forced CPU route.
+          s = s.replace('options.useGpu = gpu.isChecked();', 'options.useGpu = false;')
+          s = s.replace('options.keepModelsLoaded = keep.isChecked();', 'options.keepModelsLoaded = false;')
+
+          # Public gallery save after successful generation.
+          old_success = '''                if (result != null) {
+                      image.setImageBitmap(result);
+                      status.setText(String.format("Done in %.1f s (seed %d)\\n%s", sec, nSeed, out));
+                  } else if (err != null && err.isOutOfMemory()) {'''
+          new_success = '''                if (result != null) {
+                      image.setImageBitmap(result);
+                      lastOutputFile = out;
+                      try {
+                          lastSavedUri = GalleryUtil.save(this, out, nSeed);
+                          saveImage.setEnabled(true);
+                          shareImage.setEnabled(true);
+                          status.setText(String.format("生成完了 %.1f秒（seed %d）\\nPictures/NoctQ に保存しました", sec, nSeed));
+                      } catch (Exception saveError) {
+                          saveImage.setEnabled(true);
+                          shareImage.setEnabled(false);
+                          status.setText(String.format("生成完了 %.1f秒（seed %d）\\n画像の保存に失敗: %s", sec, nSeed, saveError.getMessage()));
+                      }
+                  } else if (err != null && err.isOutOfMemory()) {'''
+          if old_success not in s:
+              raise SystemExit("generation success patch target not found")
+          s = s.replace(old_success, new_success)
+
+          # Insert preset/save/share methods before showError.
+          marker = '    private void showError(String title, String message) {'
+          methods = r'''
+              private void applyPreset(int mode) {
+                  keep.setChecked(false);
+                  gpu.setChecked(false);
+                  teCpu.setChecked(true);
+                  if (mode == 0) {
+                      if (QwenImage21.missingTurboDitFiles(modelDir) == null) {
+                          tier.setSelection(1);
+                          turbo.setChecked(true);
+                          status.setText("高速モード：Turbo 6step / Fast 384");
+                      } else {
+                          tier.setSelection(2);
+                          turbo.setChecked(false);
+                          steps.setText("8");
+                          status.setText("高速モード：Tiny 320 / 8step（Turbo導入でさらに高速化できます）");
+                      }
+                  } else if (mode == 1) {
+                      tier.setSelection(1);
+                      turbo.setChecked(false);
+                      steps.setText("12");
+                      status.setText("標準モード：Fast 384 / 12step");
+                  } else {
+                      tier.setSelection(1);
+                      turbo.setChecked(false);
+                      steps.setText("20");
+                      status.setText("高品質モード：Fast 384 / 20step（実機完走確認済み）");
+                  }
+              }
+
+              private void saveLastImage() {
+                  if (lastOutputFile == null || !lastOutputFile.isFile()) {
+                      showError("保存できません", "まだ生成画像がありません。");
+                      return;
+                  }
+                  try {
+                      int s = parse(seed, 42);
+                      lastSavedUri = GalleryUtil.save(this, lastOutputFile, s);
+                      shareImage.setEnabled(true);
+                      status.setText("Pictures/NoctQ に画像を保存しました");
+                  } catch (Exception e) {
+                      showError("保存失敗", e.getMessage());
+                  }
+              }
+
+              private void shareLastImage() {
+                  if (lastSavedUri == null) {
+                      saveLastImage();
+                  }
+                  if (lastSavedUri != null) GalleryUtil.share(this, lastSavedUri);
+              }
+
+          '''
+          if marker not in s:
+              raise SystemExit("method insertion target not found")
+          s = s.replace(marker, methods + marker)
+          p.write_text(s)
+
+          # ---------- Japanese layout ----------
+          layout = r'''<?xml version="1.0" encoding="utf-8"?>
+          <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:fitsSystemWindows="true">
+              <LinearLayout
+                  android:layout_width="match_parent"
+                  android:layout_height="wrap_content"
+                  android:orientation="vertical"
+                  android:padding="16dp">
+
+                  <TextView
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:text="NoctQ Mobile v5 · ローカル画像生成"
+                      android:textSize="22sp"
+                      android:textStyle="bold" />
+
+                  <TextView
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="日本語でそのまま入力できます。生成画像は Pictures/NoctQ に自動保存します。"
+                      android:textSize="12sp"
+                      android:layout_marginBottom="8dp" />
+
+                  <LinearLayout
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:orientation="horizontal">
+                      <Button android:id="@+id/tab_t2i" android:layout_width="0dp" android:layout_height="wrap_content"
+                          android:layout_weight="1" android:text="文章から画像" />
+                      <Button android:id="@+id/tab_i2i" android:layout_width="0dp" android:layout_height="wrap_content"
+                          android:layout_weight="1" android:text="画像を編集" />
+                  </LinearLayout>
+
+                  <LinearLayout
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:orientation="horizontal"
+                      android:layout_marginTop="8dp">
+                      <EditText android:id="@+id/prompt" android:layout_width="0dp" android:layout_height="wrap_content"
+                          android:layout_weight="1" android:minLines="4" android:gravity="top"
+                          android:inputType="textMultiLine" android:hint="生成したい内容を日本語で入力" />
+                      <Button android:id="@+id/history" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                          android:text="履歴" />
+                  </LinearLayout>
+
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:text="おすすめ設定" android:textStyle="bold" android:layout_marginTop="8dp" />
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:orientation="horizontal">
+                      <Button android:id="@+id/preset_fast" android:layout_width="0dp" android:layout_height="wrap_content"
+                          android:layout_weight="1" android:text="高速" />
+                      <Button android:id="@+id/preset_normal" android:layout_width="0dp" android:layout_height="wrap_content"
+                          android:layout_weight="1" android:text="標準" />
+                      <Button android:id="@+id/preset_quality" android:layout_width="0dp" android:layout_height="wrap_content"
+                          android:layout_weight="1" android:text="高品質" />
+                  </LinearLayout>
+
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:gravity="center_vertical" android:orientation="horizontal">
+                      <TextView android:layout_width="72dp" android:layout_height="wrap_content" android:text="画質" />
+                      <Spinner android:id="@+id/tier" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                  </LinearLayout>
+
+                  <LinearLayout android:id="@+id/panel_t2i" android:layout_width="match_parent"
+                      android:layout_height="wrap_content" android:orientation="vertical">
+                      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                          android:gravity="center_vertical" android:orientation="horizontal">
+                          <TextView android:layout_width="72dp" android:layout_height="wrap_content" android:text="縦横比" />
+                          <Spinner android:id="@+id/ratio" android:layout_width="match_parent" android:layout_height="wrap_content" />
+                      </LinearLayout>
+                      <TextView android:id="@+id/size_info" android:layout_width="match_parent"
+                          android:layout_height="wrap_content" android:layout_marginStart="72dp" android:textSize="12sp" />
+                  </LinearLayout>
+
+                  <LinearLayout android:id="@+id/panel_i2i" android:layout_width="match_parent"
+                      android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                      <Button android:id="@+id/pick" android:layout_width="match_parent" android:layout_height="wrap_content"
+                          android:text="元画像を選ぶ" />
+                      <TextView android:id="@+id/input_info" android:layout_width="match_parent" android:layout_height="wrap_content"
+                          android:text="元画像が選択されていません" android:textSize="12sp" />
+                      <ImageView android:id="@+id/input_preview" android:layout_width="match_parent" android:layout_height="160dp"
+                          android:adjustViewBounds="true" android:scaleType="fitCenter" />
+                      <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                          <Button android:id="@+id/pick2" android:layout_width="0dp" android:layout_height="wrap_content"
+                              android:layout_weight="1" android:text="2枚目を追加（任意）" />
+                          <Button android:id="@+id/clear2" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                              android:text="消去" />
+                      </LinearLayout>
+                      <TextView android:id="@+id/input_info2" android:layout_width="match_parent" android:layout_height="wrap_content"
+                          android:text="2枚目の参照画像なし" android:textSize="12sp" />
+                      <ImageView android:id="@+id/input_preview2" android:layout_width="match_parent" android:layout_height="160dp"
+                          android:adjustViewBounds="true" android:scaleType="fitCenter" android:visibility="gone" />
+                      <CheckBox android:id="@+id/ref_half" android:layout_width="match_parent" android:layout_height="wrap_content"
+                          android:text="参照画像を半分に縮小（省メモリ・高速）" />
+                  </LinearLayout>
+
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:gravity="center_vertical" android:orientation="horizontal">
+                      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Step" />
+                      <EditText android:id="@+id/steps" android:layout_width="64dp" android:layout_height="wrap_content"
+                          android:inputType="number" android:text="20" />
+                      <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                          android:layout_marginStart="12dp" android:text="Seed" />
+                      <EditText android:id="@+id/seed" android:layout_width="96dp" android:layout_height="wrap_content"
+                          android:inputType="numberSigned" android:text="42" />
+                  </LinearLayout>
+
+                  <CheckBox android:id="@+id/turbo" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                      android:text="高速Turbo（6step・別モデルが必要）" />
+                  <CheckBox android:id="@+id/gpu" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                      android:checked="false" android:text="GPU" android:visibility="gone" />
+                  <CheckBox android:id="@+id/te_cpu" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                      android:checked="true" android:text="文章処理CPU" android:visibility="gone" />
+                  <CheckBox android:id="@+id/keep" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                      android:checked="false" android:text="モデル保持" android:visibility="gone" />
+
+                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:text="モデル管理" android:textStyle="bold" android:layout_marginTop="8dp" />
+                  <CheckBox android:id="@+id/dl_standard" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                      android:text="通常モデル" />
+                  <CheckBox android:id="@+id/dl_turbo" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                      android:checked="true" android:text="高速Turboモデル" />
+                  <Button android:id="@+id/download" android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:text="選択したモデルをダウンロード" />
+
+                  <Button android:id="@+id/generate" android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:text="画像を生成する" android:layout_marginTop="8dp" />
+
+                  <ProgressBar android:id="@+id/progress" style="@android:style/Widget.Material.ProgressBar.Horizontal"
+                      android:layout_width="match_parent" android:layout_height="wrap_content" android:max="100" />
+
+                  <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:textIsSelectable="true" android:textSize="12sp" />
+
+                  <ImageView android:id="@+id/image" android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:layout_marginTop="12dp" android:adjustViewBounds="true" />
+
+                  <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                      android:orientation="horizontal" android:layout_marginTop="8dp">
+                      <Button android:id="@+id/save_image" android:layout_width="0dp" android:layout_height="wrap_content"
+                          android:layout_weight="1" android:text="画像を保存" />
+                      <Button android:id="@+id/share_image" android:layout_width="0dp" android:layout_height="wrap_content"
+                          android:layout_weight="1" android:text="共有" />
+                  </LinearLayout>
+              </LinearLayout>
+          </ScrollView>
+          '''
+          Path("demo/src/main/res/layout/activity_main.xml").write_text(layout)
+
+          # App label and legacy write permission (not needed on the user's Android 16, harmless for old devices).
+          manifest = Path("demo/src/main/AndroidManifest.xml")
+          m = manifest.read_text()
+          m = m.replace('<uses-permission android:name="android.permission.INTERNET" />',
+                        '<uses-permission android:name="android.permission.INTERNET" />\n'
+                        '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />')
+          m = m.replace('android:label="Qwen-Image 2.1"', 'android:label="NoctQ Mobile v5"')
+          manifest.write_text(m)
+          PY
       - name: Rebuild patched MNN for Android arm64
         working-directory: libQwenImage21
         run: |
@@ -140,11 +538,11 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p out
-          cp libQwenImage21/demo/build/outputs/apk/debug/demo-debug.apk out/NoctQ-CPU-LowMemory-v4.apk
-          sha256sum out/NoctQ-CPU-LowMemory-v4.apk | tee out/SHA256.txt
+          cp libQwenImage21/demo/build/outputs/apk/debug/demo-debug.apk out/NoctQ-Mobile-v5.apk
+          sha256sum out/NoctQ-Mobile-v5.apk | tee out/SHA256.txt
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NoctQ-CPU-LowMemory-v4
+          name: NoctQ-Mobile-v5
           path: out/
           if-no-files-found: error

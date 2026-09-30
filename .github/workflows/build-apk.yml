@@ -1,4 +1,4 @@
-name: Build NoctQ Mobile v5.1 APK
+name: Build NoctQ Mobile v6 APK
 on:
   workflow_dispatch:
   push:
@@ -506,6 +506,10 @@ jobs:
           m = m.replace('android:label="Qwen-Image 2.1"', 'android:label="NoctQ Mobile v5.1"')
           manifest.write_text(m)
           PY
+      - name: Patch Noct-Q v6 app
+        run: |
+          python3 .github/scripts/patch_noct_v6.py
+
       - name: Restore proven v4 low-memory MNN
         uses: actions/download-artifact@v4
         with:
@@ -529,11 +533,11 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p out
-          cp libQwenImage21/demo/build/outputs/apk/debug/demo-debug.apk out/NoctQ-Mobile-v5.1.apk
-          sha256sum out/NoctQ-Mobile-v5.1.apk | tee out/SHA256.txt
+          cp libQwenImage21/demo/build/outputs/apk/debug/demo-debug.apk out/NoctQ-Mobile-v6.apk
+          sha256sum out/NoctQ-Mobile-v6.apk | tee out/SHA256.txt
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NoctQ-Mobile-v5.1
+          name: NoctQ-Mobile-v6
           path: out/
           if-no-files-found: error

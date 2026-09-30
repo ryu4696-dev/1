@@ -1,0 +1,23 @@
+name: Probe Noct-Q files
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe Civitai model API
+        run: |
+          set -eux
+          curl -L --retry 3 --fail --silent --show-error https://civitai.com/api/v1/models/2967534 -o /tmp/model.json
+          python3 - <<'PY'
+          import json
+          j=json.load(open('/tmp/model.json'))
+          print("MODEL", j.get("name"))
+          for v in j.get("modelVersions",[]):
+              print("VERSION",v.get("id"),v.get("name"),v.get("baseModel"))
+              for f in v.get("files",[]):
+                  print("FILE",f.get("id"),f.get("name"),f.get("sizeKB"),f.get("type"),
+                        f.get("metadata"),f.get("downloadUrl"))
+          PY

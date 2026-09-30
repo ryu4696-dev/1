@@ -1,0 +1,254 @@
+name: Convert Noct-Q to Android MNN
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/convert-noct.yml'
+permissions:
+  contents: write
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Free disk space
+        run: |
+          df -h
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
+          sudo rm -rf /usr/local/lib/android || true
+          sudo docker system prune -af || true
+          df -h
+
+      - name: Checkout converter
+        uses: actions/checkout@v4
+        with:
+          repository: scsonic/libQwenImage21
+          path: lib
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Use current Qwen MNN branch
+        working-directory: lib
+        run: |
+          git -C third_party/MNN fetch origin qwen-image-21 --depth=1
+          git -C third_party/MNN checkout deec3b3ff369a08301e9caf66ecfa646f4382ffe
+          mkdir -p ref
+          rm -f ref/llmexport
+          ln -s ../third_party/MNN/transformers/llm/export ref/llmexport
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Python conversion dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --index-url https://download.pytorch.org/whl/cpu torch
+          python -m pip install numpy safetensors onnx packaging
+
+      - name: Build host MNNConvert
+        working-directory: lib
+        run: |
+          set -eux
+          mkdir -p third_party/MNN/build_host
+          cd third_party/MNN/build_host
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DMNN_BUILD_CONVERTER=ON \
+            -DMNN_BUILD_LLM=ON \
+            -DMNN_BUILD_DIFFUSION=ON \
+            -DMNN_LOW_MEMORY=ON \
+            -DMNN_SUPPORT_TRANSFORMER_FUSE=ON \
+            -DMNN_BUILD_OPENCV=OFF \
+            -DMNN_IMGCODECS=OFF \
+            -DMNN_SEP_BUILD=OFF
+          cmake --build . --target MNNConvert -j 2
+          ./MNNConvert -v || true
+
+      - name: Add ConvRot safetensors input to exporter
+        working-directory: lib
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('export/export_mnn.py')
+          s=p.read_text()
+          marker='class LoRAWeights:'
+          if marker not in s:
+              raise SystemExit('LoRAWeights marker missing')
+          cls=r"""
+class SafeTensorConvRotWeights:
+    # Lazy reader for ComfyUI INT8 ConvRot safetensors.
+    def __init__(self, path, gate_first=True):
+        from safetensors import safe_open
+        self.f = safe_open(path, framework="pt", device="cpu")
+        self.keys = set(self.f.keys())
+        self.gate_first = gate_first
+        self._gate_cache = {}
+
+    def _cfg(self, base):
+        k = base + ".comfy_quant"
+        if k not in self.keys:
+            return {}
+        raw = self.f.get_tensor(k).to(torch.uint8).numpy().tobytes()
+        try:
+            return json.loads(raw.decode("utf-8"))
+        except Exception:
+            return {}
+
+    @staticmethod
+    def _regular_hadamard_inplace(w, gs):
+        if gs not in (16, 64, 256):
+            raise ValueError(f"unsupported ConvRot group size {gs}")
+        if w.shape[1] % gs:
+            raise ValueError((w.shape, gs))
+        dims = {16: 2, 64: 3, 256: 4}[gs]
+        norm = float(gs) ** 0.5
+        chunk_rows = 256
+        for st in range(0, w.shape[0], chunk_rows):
+            en = min(st + chunk_rows, w.shape[0])
+            x = w[st:en].reshape(en-st, w.shape[1] // gs, *([4] * dims))
+            for axis in range(2, 2 + dims):
+                z = x.movedim(axis, -1)
+                a, b, c, d = z.unbind(-1)
+                z = torch.stack((a+b+c-d, a+b-c+d, a-b+c+d, -a+b+c+d), dim=-1)
+                x = z.movedim(-1, axis)
+            w[st:en].copy_(x.reshape(en-st, w.shape[1]) / norm)
+        return w
+
+    def _load(self, name):
+        t = self.f.get_tensor(name)
+        if t.dtype == torch.int8:
+            sk = name + "_scale"
+            if sk not in self.keys:
+                raise KeyError(f"INT8 tensor without scale: {name}")
+            scale = self.f.get_tensor(sk).float()
+            w = t.float()
+            w.mul_(scale)
+            base = name[:-len(".weight")] if name.endswith(".weight") else name
+            cfg = self._cfg(base)
+            if cfg.get("convrot"):
+                self._regular_hadamard_inplace(w, int(cfg.get("convrot_groupsize", 256)))
+            return w
+        return t.float()
+
+    def __call__(self, name):
+        if name.endswith(".img_mlp.gate_layer") or name.endswith(".img_mlp.proj"):
+            base = name.rsplit(".", 1)[0]
+            gate_name = base + ".gate_layer"
+            proj_name = base + ".proj"
+            if name in self._gate_cache:
+                return self._gate_cache.pop(name)
+            w = self._load(base + ".gate_up.weight")
+            a, b = w.chunk(2, dim=0)
+            gate, proj = (a, b) if self.gate_first else (b, a)
+            if name == gate_name:
+                self._gate_cache[proj_name] = proj.contiguous()
+                return gate.contiguous()
+            self._gate_cache[gate_name] = gate.contiguous()
+            return proj.contiguous()
+        return self._load(name + ".weight")
+
+    def param(self, name):
+        return self._load(name)
+
+
+"""
+          s=s.replace(marker,cls+marker,1)
+          s=s.replace('    ap.add_argument("--gguf")',
+                      '    ap.add_argument("--gguf")\n    ap.add_argument("--safetensors")',1)
+          old="""        W = GGUFWeights(a.gguf, gate_first=bool(a.gate_first))
+        wp, params = W, W.param
+        layers = a.layers"""
+          new="""        if a.safetensors:
+            W = SafeTensorConvRotWeights(a.safetensors, gate_first=bool(a.gate_first))
+        else:
+            W = GGUFWeights(a.gguf, gate_first=bool(a.gate_first))
+        wp, params = W, W.param
+        layers = a.layers"""
+          if old not in s:
+              raise SystemExit('weight provider selection target missing')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          PY
+
+      - name: Download public Noct-Q INT8 ConvRot
+        working-directory: lib
+        run: |
+          mkdir -p models/noct-src
+          URL="https://huggingface.co/Noctaluna/Noct-Q-Anime-Uncensored-Qwen-Image-2.1/resolve/main/NoctQA_V1_int8_convrot.safetensors"
+          curl -L --retry 5 --retry-delay 5 --fail --show-error --progress-bar \
+            "$URL" -o models/noct-src/noct-int8.safetensors
+          ls -lh models/noct-src/noct-int8.safetensors
+          df -h
+
+      - name: Convert Noct-Q to MNN INT4
+        working-directory: lib
+        env:
+          MNNCONVERT: ${{ github.workspace }}/lib/third_party/MNN/build_host/MNNConvert
+        run: |
+          set -eux
+          mkdir -p models/noct-mnn
+          python export/export_mnn.py \
+            --safetensors models/noct-src/noct-int8.safetensors \
+            --out models/noct-mnn \
+            --bits 4 --aux_bits 8 --block 64 --fuse 0 \
+            --only txt_in,img_in,dit
+          rm -rf models/noct-mnn/onnx
+          ls -lh models/noct-mnn
+          sha256sum models/noct-mnn/*.mnn models/noct-mnn/*.weight | tee models/noct-mnn/SHA256SUMS.txt
+          df -h
+
+      - name: Prepare release chunks
+        working-directory: lib
+        run: |
+          set -eux
+          rm -rf models/noct-src third_party/MNN/build_host
+          mkdir -p release
+          curl -L --fail --silent --show-error \
+            https://huggingface.co/Noctaluna/Noct-Q-Anime-Uncensored-Qwen-Image-2.1/resolve/main/LICENSE \
+            -o models/noct-mnn/NOCTQ_LICENSE.txt || true
+          curl -L --fail --silent --show-error \
+            https://huggingface.co/Noctaluna/Noct-Q-Anime-Uncensored-Qwen-Image-2.1/resolve/main/NOTICE \
+            -o models/noct-mnn/NOCTQ_NOTICE.txt || true
+          python - <<'PY'
+          import json,os,hashlib
+          root='models/noct-mnn'
+          files=[]
+          for n in sorted(os.listdir(root)):
+              p=os.path.join(root,n)
+              if os.path.isfile(p):
+                  h=hashlib.sha256()
+                  with open(p,'rb') as f:
+                      for b in iter(lambda:f.read(8<<20),b''): h.update(b)
+                  files.append({'name':n,'size':os.path.getsize(p),'sha256':h.hexdigest()})
+          json.dump({
+              'model':'Noct-Q Anime V1',
+              'source':'https://huggingface.co/Noctaluna/Noct-Q-Anime-Uncensored-Qwen-Image-2.1',
+              'source_quant':'NoctQA_V1_int8_convrot.safetensors',
+              'runtime_quant':'MNN int4 block64; aux int8; img_in fp16',
+              'files':files
+          },open(os.path.join(root,'manifest.json'),'w'),ensure_ascii=False,indent=2)
+          PY
+          files="dit.mnn txt_in.mnn txt_in.mnn.weight img_in.mnn img_in.mnn.weight SHA256SUMS.txt manifest.json"
+          [ -f models/noct-mnn/NOCTQ_LICENSE.txt ] && files="$files NOCTQ_LICENSE.txt"
+          [ -f models/noct-mnn/NOCTQ_NOTICE.txt ] && files="$files NOCTQ_NOTICE.txt"
+          tar -C models/noct-mnn -cf release/noctq-meta.tar $files
+          split -b 1500M -d -a 2 models/noct-mnn/dit.mnn.weight release/noctq-dit.mnn.weight.part-
+          sha256sum release/* | tee release/RELEASE_SHA256SUMS.txt
+          ls -lh release
+          df -h
+
+      - name: Publish converted model release
+        working-directory: lib
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eux
+          TAG="noctq-mobile-model-v1"
+          gh release view "$TAG" -R ryu4696-dev/1 >/dev/null 2>&1 || \
+            gh release create "$TAG" -R ryu4696-dev/1 \
+              --title "Noct-Q Mobile MNN model v1" \
+              --notes "Non-commercial Noct-Q Anime V1 converted for NoctQ Mobile. Source and license: https://huggingface.co/Noctaluna/Noct-Q-Anime-Uncensored-Qwen-Image-2.1"
+          gh release upload "$TAG" release/* -R ryu4696-dev/1 --clobber

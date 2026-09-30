@@ -73,6 +73,31 @@ jobs:
           p.write_text(s)
           print("patched", p)
           PY
+      - name: Force CPU DiT and low-memory CPU backend
+        working-directory: libQwenImage21
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # Force JNI to create a CPU diffusion backend regardless of the UI checkbox.
+          p = Path("qwenimage21/src/main/cpp/qwenimage21_jni.cpp")
+          s = p.read_text()
+          old = 'useGpu ? MNN_FORWARD_OPENCL : MNN_FORWARD_CPU'
+          if old not in s:
+              raise SystemExit("JNI GPU selector target not found")
+          s = s.replace(old, 'MNN_FORWARD_CPU', 1)
+          p.write_text(s)
+
+          # CPU DiT: prefer Memory_Low for this text-to-image diagnostic.
+          p = Path("third_party/MNN/transformers/diffusion/engine/src/qwen_image21_diffusion.cpp")
+          s = p.read_text()
+          old = 'bc.memory = BackendConfig::Memory_Normal;'
+          if old not in s:
+              raise SystemExit("CPU memory mode target not found")
+          s = s.replace(old, 'bc.memory = BackendConfig::Memory_Low;', 1)
+          p.write_text(s)
+          print("forced CPU DiT + Memory_Low")
+          PY
       - name: Rebuild patched MNN for Android arm64
         working-directory: libQwenImage21
         run: |
@@ -115,11 +140,11 @@ jobs:
       - name: Collect APK
         run: |
           mkdir -p out
-          cp libQwenImage21/demo/build/outputs/apk/debug/demo-debug.apk out/NoctQ-LowMemory-v3.apk
-          sha256sum out/NoctQ-LowMemory-v3.apk | tee out/SHA256.txt
+          cp libQwenImage21/demo/build/outputs/apk/debug/demo-debug.apk out/NoctQ-CPU-LowMemory-v4.apk
+          sha256sum out/NoctQ-CPU-LowMemory-v4.apk | tee out/SHA256.txt
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: NoctQ-LowMemory-v3
+          name: NoctQ-CPU-LowMemory-v4
           path: out/
           if-no-files-found: error

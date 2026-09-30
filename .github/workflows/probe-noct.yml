@@ -21,3 +21,24 @@ jobs:
                   print("FILE",f.get("id"),f.get("name"),f.get("sizeKB"),f.get("type"),
                         f.get("metadata"),f.get("downloadUrl"))
           PY
+      - name: Probe INT4 safetensors header
+        run: |
+          set -eux
+          URL="https://civitai.com/api/download/models/3362444?fileId=3250288"
+          curl -L --retry 3 --fail --silent --show-error --range 0-4194303 "$URL" -o /tmp/noct-head.bin
+          python3 - <<'PY'
+          import json,struct
+          p='/tmp/noct-head.bin'
+          b=open(p,'rb').read()
+          n=struct.unpack('<Q',b[:8])[0]
+          print('HEADER_LEN',n,'DOWNLOADED',len(b))
+          if len(b)<8+n:
+              raise SystemExit('header range too short')
+          h=json.loads(b[8:8+n])
+          print('METADATA',h.get('__metadata__'))
+          keys=[k for k in h if k!='__metadata__']
+          print('KEY_COUNT',len(keys))
+          for k in keys[:220]:
+              v=h[k]
+              print('TENSOR',k,v.get('dtype'),v.get('shape'))
+          PY

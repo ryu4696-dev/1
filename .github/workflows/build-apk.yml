@@ -254,23 +254,36 @@ jobs:
           s = s.replace('options.keepModelsLoaded = keep.isChecked();', 'options.keepModelsLoaded = false;')
 
           # Public gallery save after successful generation.
-          old_success = '''                    image.setImageBitmap(result);
-                    status.setText(String.format("Done in %.1f s (seed %d)\\n%s", sec, nSeed, out));'''
-          new_success = '''                    image.setImageBitmap(result);
-                    lastOutputFile = out;
-                    try {
-                        lastSavedUri = GalleryUtil.save(this, out, nSeed);
-                        saveImage.setEnabled(true);
-                        shareImage.setEnabled(true);
-                        status.setText(String.format("生成完了 %.1f秒（seed %d）\\nPictures/NoctQ に保存しました", sec, nSeed));
-                    } catch (Exception saveError) {
-                        saveImage.setEnabled(true);
-                        shareImage.setEnabled(false);
-                        status.setText(String.format("生成完了 %.1f秒（seed %d）\\n画像の保存に失敗: %s", sec, nSeed, saveError.getMessage()));
-                    }'''
-          if old_success not in s:
-              raise SystemExit("generation success lines not found")
-          s = s.replace(old_success, new_success, 1)
+          src_lines = s.splitlines()
+          patched_lines = []
+          i = 0
+          gallery_patched = False
+          while i < len(src_lines):
+              line = src_lines[i]
+              if 'image.setImageBitmap(result);' in line and i + 1 < len(src_lines) and 'Done in %.1f s' in src_lines[i + 1]:
+                  indent = line[:len(line) - len(line.lstrip())]
+                  patched_lines.append(line)
+                  patched_lines.extend([
+                      indent + 'lastOutputFile = out;',
+                      indent + 'try {',
+                      indent + '    lastSavedUri = GalleryUtil.save(this, out, nSeed);',
+                      indent + '    saveImage.setEnabled(true);',
+                      indent + '    shareImage.setEnabled(true);',
+                      indent + '    status.setText(String.format("生成完了 %.1f秒（seed %d）\\nPictures/NoctQ に保存しました", sec, nSeed));',
+                      indent + '} catch (Exception saveError) {',
+                      indent + '    saveImage.setEnabled(true);',
+                      indent + '    shareImage.setEnabled(false);',
+                      indent + '    status.setText(String.format("生成完了 %.1f秒（seed %d）\\n画像の保存に失敗: %s", sec, nSeed, saveError.getMessage()));',
+                      indent + '}',
+                  ])
+                  i += 2
+                  gallery_patched = True
+                  continue
+              patched_lines.append(line)
+              i += 1
+          if not gallery_patched:
+              raise SystemExit("generation success line scan target not found")
+          s = "\n".join(patched_lines) + "\n"
 
           # Insert preset/save/share methods before showError.
           marker = '    private void showError(String title, String message) {'

@@ -521,9 +521,14 @@ x = x.replace(
     '日本語でそのまま入力できます。生成画像は Pictures/NoctQ に自動保存します。',
     'Noct-Q Anime V1を端末内で生成。日本語入力・Pictures/NoctQ自動保存。'
 )
-# Put anime/photo switch below prompt area, before recommended settings.
-target = '''                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                      android:text="おすすめ設定" android:textStyle="bold" android:layout_marginTop="8dp" />'''
+# Put anime/photo switch before the "おすすめ設定" label, independent of indentation.
+label = 'android:text="おすすめ設定"'
+pos = x.find(label)
+if pos < 0:
+    raise SystemExit("layout recommended label missing")
+line_start = x.rfind("\n", 0, pos)
+# Include the opening TextView line immediately above the label line.
+block_start = x.rfind("\n", 0, line_start) + 1
 anime = '''                  <CheckBox
                       android:id="@+id/anime_mode"
                       android:layout_width="match_parent"
@@ -531,11 +536,9 @@ anime = '''                  <CheckBox
                       android:checked="true"
                       android:text="アニメ優先（OFFで写真寄り）" />
 
-                  <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                      android:text="おすすめ設定" android:textStyle="bold" android:layout_marginTop="8dp" />'''
-if target not in x:
-    raise SystemExit("layout recommended target missing")
-x = x.replace(target, anime, 1)
+'''
+x = x[:block_start] + anime + x[block_start:]
+
 x = x.replace('android:text="高速" />', 'android:text="省時間" />', 1)
 # Hide old Turbo and upstream model selectors; keep IDs because MainActivity references them.
 x = x.replace(

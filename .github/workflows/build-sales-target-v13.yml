@@ -7,7 +7,7 @@ on:
       - sales-target-v13
     paths:
       - '.github/workflows/build-sales-target-v13.yml'
-      - '.build/sales-target-v1.3.tar.gz.b64'
+      - '.build/v13.part*'
 
 jobs:
   build:
@@ -24,7 +24,7 @@ jobs:
       - name: Restore source
         shell: bash
         run: |
-          base64 -d .build/sales-target-v1.3.tar.gz.b64 > /tmp/sales-target-v1.3.tar.gz
+          cat .build/v13.part* | base64 -d > /tmp/sales-target-v1.3.tar.gz
           echo "45ca0a93e014469a733b3ea0f124736e43f3cbfc849f4eed42469cd34cf1a49d  /tmp/sales-target-v1.3.tar.gz" | sha256sum -c -
           rm -rf sales-target-app
           tar -xzf /tmp/sales-target-v1.3.tar.gz -C .
